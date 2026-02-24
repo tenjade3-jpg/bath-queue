@@ -87,7 +87,17 @@
     margin-left:6px;
   }
 
-  /* 第三位提醒 */
+  .lockMsg{
+    font-size:13px;
+    padding:10px 12px;
+    border-radius:14px;
+    border:1px solid rgba(229,83,83,.25);
+    background:rgba(229,83,83,.08);
+    margin-top:10px;
+    display:none;
+    font-weight:900;
+  }
+
   .prepLine{
     margin-top:10px;
     padding:10px 14px;
@@ -116,7 +126,6 @@
     <p class="sub">（rooms + 15 分鐘計時制）</p>
   </div>
 
-  <!-- 房間選擇 -->
   <div class="card">
     <div class="row">
       <select id="roomSelect"></select>
@@ -125,48 +134,43 @@
     <div class="hint" id="roomHint">載入房間中…</div>
     <div class="hint">
       <span class="pill">每人 15 分鐘</span>
-      <span class="pill" id="plannedStartPill">預計開始：—</span>
+      <span class="pill" id="plannedStartPill">可開始時間：—</span>
+      <span class="pill" id="pausedPill">狀態：—</span>
     </div>
     <div class="hint">※ 排隊與分配由管理員安排（本頁不提供加入排隊）</div>
   </div>
 
-  <!-- 狀態 -->
   <div class="card status">
     現在洗澡： <span id="current" class="now">—</span>
+
     <div class="timerLine">
       <span>剩餘：</span><span id="remain" class="remain">—</span>
       <button class="ghost" id="startTimerBtn" style="display:none;">開始計時（現在洗澡的人按）</button>
     </div>
 
-    下一位： <span id="next" class="next">—</span><br>
+    <div id="lockMsg" class="lockMsg"></div>
 
+    下一位： <span id="next" class="next">—</span><br>
     <div id="prepLine" class="prepLine" style="display:none;">
       <span id="next2">—</span> 準備洗澡
     </div>
   </div>
 
-  <!-- 使用者操作：只保留開始計時 + 叫下一位 -->
   <div class="card">
     <button class="finish" id="doneBtn">我洗好了 → 叫下一位</button>
-    <div class="hint">（叫下一位會重置 15 分鐘計時，讓下一位再按開始）</div>
+    <div class="hint">（叫下一位會重置計時，讓下一位再按開始）</div>
   </div>
 
-  <!-- 名單 -->
   <div class="card">
     <h3 style="margin:0 0 8px;">排隊名單（含預估時間）</h3>
     <div id="queueEmpty" style="opacity:.6;">（目前沒有人排隊）</div>
     <ul id="queueList"></ul>
   </div>
-
-  <audio id="beep" preload="auto"
-    src="data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQwAAAAA/////wAAAP////8AAAD/////AAAA/////wAAAP////8AAAD/////AAAA/////wAAAP////8="></audio>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-import {
-  getDatabase, ref, set, remove, onValue, get, query, orderByChild, limitToFirst
-} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+import { getDatabase, ref, set, remove, onValue, get, query, orderByChild, limitToFirst } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBSQAmMKvFjuANWhmZJAYHCwaIUTcwz6A8",
@@ -186,6 +190,7 @@ const DURATION_MS = 15 * 60 * 1000;
 const roomSelect = document.getElementById("roomSelect");
 const roomHint = document.getElementById("roomHint");
 const plannedStartPill = document.getElementById("plannedStartPill");
+const pausedPill = document.getElementById("pausedPill");
 
 const currentEl = document.getElementById("current");
 const nextEl = document.getElementById("next");
@@ -194,6 +199,7 @@ const prepLineEl = document.getElementById("prepLine");
 
 const remainEl = document.getElementById("remain");
 const startTimerBtn = document.getElementById("startTimerBtn");
+const lockMsg = document.getElementById("lockMsg");
 
 const listEl = document.getElementById("queueList");
 const emptyEl = document.getElementById("queueEmpty");
@@ -203,51 +209,37 @@ let roomId = "";
 let queueCache = [];
 let lastPrepName = "";
 
-// schedule/timer cache
 let plannedStartAt = null;
+let isPaused = false;
 let timer = null;
 
-// unsub
-let unsubRooms=null, unsubCurrent=null, unsubQueue=null, unsubSchedule=null, unsubTimer=null;
-
-function playBeep(){
-  const a = document.getElementById("beep");
-  if(!a) return;
-  a.currentTime = 0;
-  const p = a.play();
-  if(p && p.catch) p.catch(()=>{});
-}
+let unsubRooms=null, unsubCurrent=null, unsubQueue=null, unsubControl=null, unsubTimer=null;
 
 function fmtHHMM(ms){
   if(!ms) return "—";
   const d = new Date(ms);
-  const hh = String(d.getHours()).padStart(2,"0");
-  const mm = String(d.getMinutes()).padStart(2,"0");
-  return `${hh}:${mm}`;
+  return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
 }
-
 function fmtRemain(ms){
   if(ms == null) return "—";
   const s = Math.max(0, Math.floor(ms/1000));
-  const mm = String(Math.floor(s/60)).padStart(2,"0");
-  const ss = String(s%60).padStart(2,"0");
-  return `${mm}:${ss}`;
-}
-
-function detachRoomListeners(){
-  if(unsubCurrent) unsubCurrent();
-  if(unsubQueue) unsubQueue();
-  if(unsubSchedule) unsubSchedule();
-  if(unsubTimer) unsubTimer();
-  unsubCurrent=unsubQueue=unsubSchedule=unsubTimer=null;
+  return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
 }
 
 function roomsRef(){ return ref(db, `queues/shower/rooms`); }
 function roomRoot(){ return `queues/shower/rooms/${roomId}`; }
 function stateCurrentRef(){ return ref(db, `${roomRoot()}/state/current`); }
 function queueRef(){ return ref(db, `${roomRoot()}/queue`); }
-function scheduleRef(){ return ref(db, `${roomRoot()}/schedule/plannedStartAt`); }
+function controlRef(){ return ref(db, `${roomRoot()}/control`); }
 function timerRef(){ return ref(db, `${roomRoot()}/timer`); }
+
+function detach(){
+  if(unsubCurrent) unsubCurrent();
+  if(unsubQueue) unsubQueue();
+  if(unsubControl) unsubControl();
+  if(unsubTimer) unsubTimer();
+  unsubCurrent=unsubQueue=unsubControl=unsubTimer=null;
+}
 
 function renderRooms(){
   roomSelect.innerHTML = "";
@@ -259,13 +251,12 @@ function renderRooms(){
     roomSelect.appendChild(opt);
     roomId = "";
     roomHint.textContent = "目前沒有房間，請管理員到 admin.html 新增淋浴間。";
-    plannedStartPill.textContent = "預計開始：—";
+    plannedStartPill.textContent = "可開始時間：—";
+    pausedPill.textContent = "狀態：—";
     return;
   }
-
   entries.sort((a,b)=> String(a[1]?.name||"").localeCompare(String(b[1]?.name||""), "zh-Hant"));
   if(!roomId || !roomMap[roomId]) roomId = entries[0][0];
-
   for(const [id, v] of entries){
     const opt = document.createElement("option");
     opt.value = id;
@@ -278,12 +269,10 @@ function renderRooms(){
 
 function updateThirdLine(){
   nextEl.innerText = queueCache[0]?.name || "—";
-
   const prepName = queueCache[1]?.name || "";
   if(prepName){
     next2El.innerText = prepName;
     prepLineEl.style.display = "inline-block";
-
     if(prepName !== lastPrepName){
       lastPrepName = prepName;
       prepLineEl.classList.remove("prepPulse");
@@ -301,15 +290,22 @@ function computeElapsedMs(t, nowMs){
   const base = (t.isRunning ? nowMs : (t.pausedAt || nowMs)) - t.startAt;
   return Math.max(0, base - (t.pausedTotalMs || 0));
 }
-
 function computeRemainMs(t, nowMs){
   if(!t || !t.startAt) return null;
   const elapsed = computeElapsedMs(t, nowMs);
   return Math.max(0, (t.durationMs || DURATION_MS) - elapsed);
 }
 
-function renderPlannedStart(){
-  plannedStartPill.textContent = `預計開始：${plannedStartAt ? fmtHHMM(plannedStartAt) : "—"}`;
+function renderControlPills(){
+  plannedStartPill.textContent = `可開始時間：${plannedStartAt ? fmtHHMM(plannedStartAt) : "—"}`;
+  pausedPill.textContent = `狀態：${isPaused ? "暫停中" : "正常"}`;
+}
+
+function canStartNow(){
+  const now = Date.now();
+  if(isPaused) return { ok:false, reason:"目前已被管理員暫停，請等待解除暫停。" };
+  if(plannedStartAt && now < plannedStartAt) return { ok:false, reason:`尚未到可開始時間（${fmtHHMM(plannedStartAt)}）。` };
+  return { ok:true, reason:"" };
 }
 
 function renderTimerUI(){
@@ -318,13 +314,24 @@ function renderTimerUI(){
 
   const remainMs = computeRemainMs(timer, nowMs);
   remainEl.textContent = fmtRemain(remainMs);
+  remainEl.classList.toggle("danger", (remainMs!=null && remainMs<=60*1000));
 
-  const danger = (remainMs != null && remainMs <= 60*1000);
-  remainEl.classList.toggle("danger", !!danger);
+  // 顯示開始按鈕條件：有 current + timer未開始 + 允許開始
+  const hasCurrent = !!curName && curName !== "—";
+  const notStarted = (!timer || !timer.startAt);
+  const gate = canStartNow();
 
-  // 有 current 且 timer 尚未 start -> 顯示開始按鈕
-  const showStart = !!curName && curName !== "—" && (!timer || !timer.startAt);
+  const showStart = hasCurrent && notStarted && gate.ok;
   startTimerBtn.style.display = showStart ? "inline-block" : "none";
+
+  // 顯示鎖定原因（有 current 且未開始，但被 gate 擋住）
+  if(hasCurrent && notStarted && !gate.ok){
+    lockMsg.style.display = "block";
+    lockMsg.textContent = gate.reason;
+  }else{
+    lockMsg.style.display = "none";
+    lockMsg.textContent = "";
+  }
 }
 
 function estimateBaseStartMs(){
@@ -354,10 +361,8 @@ function renderQueueListWithEstimates(){
 
   queueCache.forEach((q, idx)=>{
     const li = document.createElement("li");
-
     const nameSpan = document.createElement("span");
     nameSpan.textContent = q.name;
-
     const slotSpan = document.createElement("span");
     slotSpan.className = "slot";
 
@@ -375,24 +380,26 @@ function renderQueueListWithEstimates(){
   });
 }
 
-function attachRoomListeners(){
-  detachRoomListeners();
+function attach(){
+  detach();
   if(!roomId) return;
 
   unsubCurrent = onValue(stateCurrentRef(), (snap)=>{
     currentEl.innerText = (snap.exists() && snap.val()) ? snap.val() : "—";
     renderTimerUI();
-    renderQueueListWithEstimates();
   });
 
-  unsubSchedule = onValue(scheduleRef(), (snap)=>{
-    plannedStartAt = snap.exists() && snap.val() ? Number(snap.val()) : null;
-    renderPlannedStart();
+  unsubControl = onValue(controlRef(), (snap)=>{
+    const c = snap.exists() ? (snap.val()||{}) : {};
+    plannedStartAt = c.plannedStartAt ? Number(c.plannedStartAt) : null;
+    isPaused = !!c.isPaused;
+    renderControlPills();
+    renderTimerUI();
     renderQueueListWithEstimates();
   });
 
   unsubTimer = onValue(timerRef(), (snap)=>{
-    timer = snap.exists() ? (snap.val() || null) : null;
+    timer = snap.exists() ? (snap.val()||null) : null;
     renderTimerUI();
     renderQueueListWithEstimates();
   });
@@ -400,14 +407,10 @@ function attachRoomListeners(){
   unsubQueue = onValue(queueRef(), (snap)=>{
     const data = snap.val() || {};
     const arr = Object.entries(data).map(([key, v]) => ({
-      key,
-      name: v?.name ?? "",
-      ts: v?.ts ?? 0
-    })).filter(x => String(x.name).trim());
-
+      key, name: v?.name ?? "", ts: v?.ts ?? 0
+    })).filter(x=>String(x.name).trim());
     arr.sort((a,b)=>a.ts-b.ts);
     queueCache = arr;
-
     updateThirdLine();
     renderQueueListWithEstimates();
   });
@@ -416,46 +419,35 @@ function attachRoomListeners(){
 function loadRooms(){
   if(unsubRooms) unsubRooms();
   roomHint.textContent = "載入房間中…";
-
   unsubRooms = onValue(roomsRef(), (snap)=>{
     roomMap = snap.val() || {};
     renderRooms();
-    attachRoomListeners();
+    attach();
   });
 }
 
 roomSelect.addEventListener("change", ()=>{
   roomId = roomSelect.value;
   renderRooms();
-  attachRoomListeners();
+  attach();
 });
 document.getElementById("refreshRoomsBtn").addEventListener("click", loadRooms);
 
-// 每秒刷新剩餘時間（純顯示，不寫 DB）
-setInterval(()=>{
-  if(!roomId) return;
-  renderTimerUI();
-}, 1000);
+setInterval(()=>{ if(roomId) renderTimerUI(); }, 1000);
 
-/** actions **/
 startTimerBtn.addEventListener("click", async ()=>{
   if(!roomId) return;
   const curName = String(currentEl.textContent || "").trim();
   if(!curName || curName==="—") return alert("目前沒有「現在洗澡」的人");
 
+  const gate = canStartNow();
+  if(!gate.ok) return alert(gate.reason);
+
   const snap = await get(timerRef());
   const t = snap.exists() ? (snap.val() || {}) : {};
+  if(t.startAt) return;
 
-  if(t.startAt) return; // 已開始就不重複開始
-
-  const newTimer = {
-    durationMs: DURATION_MS,
-    startAt: Date.now(),
-    isRunning: true,
-    pausedAt: null,
-    pausedTotalMs: 0
-  };
-  await set(timerRef(), newTimer);
+  await set(timerRef(), { durationMs: DURATION_MS, startAt: Date.now(), isRunning: true, pausedAt: null, pausedTotalMs: 0 });
 });
 
 document.getElementById("doneBtn").addEventListener("click", async ()=>{
@@ -468,7 +460,6 @@ document.getElementById("doneBtn").addEventListener("click", async ()=>{
   if(!snap.exists()){
     await set(stateCurrentRef(), null);
     await set(timerRef(), { durationMs: DURATION_MS, startAt: null, isRunning: false, pausedAt: null, pausedTotalMs: 0 });
-    playBeep();
     return;
   }
 
@@ -477,9 +468,7 @@ document.getElementById("doneBtn").addEventListener("click", async ()=>{
 
   await set(stateCurrentRef(), nextName);
   await remove(ref(db, `${roomRoot()}/queue/${firstKey}`));
-
   await set(timerRef(), { durationMs: DURATION_MS, startAt: null, isRunning: false, pausedAt: null, pausedTotalMs: 0 });
-  playBeep();
 });
 
 loadRooms();
