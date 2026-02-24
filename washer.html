@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>洗衣機排隊系統</title>
+
+<style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #f2f4f8;
+  text-align: center;
+  margin: 0;
+  padding: 20px;
+}
+
+h1 {
+  margin-bottom: 10px;
+}
+
+.card {
+  background: white;
+  padding: 20px;
+  margin: 15px auto;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  max-width: 400px;
+}
+
+.current {
+  font-size: 24px;
+  font-weight: bold;
+  color: #007aff;
+}
+
+.next {
+  font-size: 18px;
+  margin-top: 8px;
+}
+
+.third {
+  margin-top: 6px;
+  color: #ff3b30;
+}
+
+.pulse {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+button {
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  background: #007aff;
+  color: white;
+  font-size: 16px;
+  margin: 5px;
+}
+
+button.danger {
+  background: #ff3b30;
+}
+
+input {
+  padding: 8px;
+  width: 200px;
+  margin: 8px 0;
+}
+
+.admin-panel {
+  margin-top: 20px;
+  display: none;
+}
+</style>
+</head>
+<body>
+
+<h1>🧺 洗衣機排隊系統</h1>
+
+<div class="card">
+  <div>目前使用者</div>
+  <div id="current" class="current">無</div>
+  <div id="next" class="next"></div>
+  <div id="third" class="third"></div>
+</div>
+
+<div class="card">
+  <input type="text" id="nameInput" placeholder="輸入姓名">
+  <br>
+  <button onclick="joinQueue()">加入排隊</button>
+  <button onclick="callNext()">叫下一位</button>
+</div>
+
+<div class="card">
+  <button onclick="toggleAdmin()">管理員模式</button>
+  <div class="admin-panel" id="adminPanel">
+    <button class="danger" onclick="clearCurrent()">清空目前使用者</button>
+    <button class="danger" onclick="clearQueue()">清空隊伍</button>
+  </div>
+</div>
+
+<audio id="beep" preload="auto">
+  <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgAAAAA" type="audio/wav">
+</audio>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getDatabase,
+  ref,
+  push,
+  set,
+  onValue,
+  remove,
+  get,
+  child
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+/* 🔥 替換成你的 Firebase 設定 */
+const firebaseConfig = {
+  apiKey: "你的APIKEY",
+  authDomain: "你的PROJECT.firebaseapp.com",
+  databaseURL: "https://你的PROJECT-default-rtdb.firebaseio.com",
+  projectId: "你的PROJECT",
+  storageBucket: "你的PROJECT.appspot.com",
+  messagingSenderId: "XXXX",
+  appId: "XXXX"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const stateRef = ref(db, "queues/washer/state");
+const queueRef = ref(db, "queues/washer/queue");
+
+const currentEl = document.getElementById("current");
+const nextEl = document.getElementById("next");
+const thirdEl = document.getElementById("third");
+
+let queueData = {};
+
+onValue(ref(db, "queues/washer"), (snapshot) => {
+  const data = snapshot.val() || {};
+  const current = data.state?.current || null;
+  queueData = data.queue || {};
+
+  currentEl.textContent = current || "無";
+
+  const queueArray = Object.entries(queueData)
+    .map(([id, value]) => ({ id, ...value }))
+    .sort((a,b)=>a.ts-b.ts);
+
+  nextEl.textContent = queueArray[0] ? "下一位：" + queueArray[0].name : "";
+  
+  if(queueArray[1]){
+    thirdEl.textContent = queueArray[1].name + " 準備洗衣";
+    thirdEl.classList.add("pulse");
+  }else{
+    thirdEl.textContent = "";
+    thirdEl.classList.remove("pulse");
+  }
+});
+
+window.joinQueue = async function(){
+  const name = document.getElementById("nameInput").value.trim();
+  if(!name) return alert("請輸入姓名");
+
+  const stateSnap = await get(stateRef);
+  const current = stateSnap.val()?.current;
+
+  if(!current){
+    await set(child(stateRef,"current"), name);
+  }else{
+    await push(queueRef, {
+      name: name,
+      ts: Date.now()
+    });
+  }
+
+  document.getElementById("nameInput").value = "";
+};
+
+window.callNext = async function(){
+  if(!confirm("確定叫下一位？")) return;
+
+  const queueArray = Object.entries(queueData)
+    .map(([id,value])=>({id,...value}))
+    .sort((a,b)=>a.ts-b.ts);
+
+  if(queueArray.length === 0){
+    await set(child(stateRef,"current"), null);
+    return;
+  }
+
+  const next = queueArray[0];
+  await set(child(stateRef,"current"), next.name);
+  await remove(ref(db,"queues/washer/queue/"+next.id));
+
+  document.getElementById("beep").play();
+};
+
+window.clearCurrent = async function(){
+  await set(child(stateRef,"current"), null);
+};
+
+window.clearQueue = async function(){
+  await remove(queueRef);
+};
+
+window.toggleAdmin = function(){
+  const password = prompt("輸入管理員密碼");
+  if(password === "admin123"){
+    document.getElementById("adminPanel").style.display = "block";
+  }else{
+    alert("密碼錯誤");
+  }
+};
+</script>
+
+</body>
+</html>
