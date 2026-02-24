@@ -77,6 +77,8 @@
   .topRight{ display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
   a.link{ text-decoration:none; font-weight:900; color:#111; opacity:.8; }
   a.link:hover{ opacity:1; }
+
+  .sectionTitle{ font-weight:900; margin:0 0 8px; }
 </style>
 </head>
 
@@ -87,7 +89,7 @@
     <div class="row" style="justify-content:space-between">
       <div>
         <h1>🛠 管理員介面</h1>
-        <div class="sub">新增房間/機台 + 排序/設為現在/刪除/清空</div>
+        <div class="sub">新增房間/機台 + 調度 +（洗澡）計時控制</div>
       </div>
       <div class="topRight">
         <span class="pill" id="loginState">未登入</span>
@@ -128,7 +130,7 @@
       <div class="hint" id="roomHint" style="margin-top:12px;">載入中…</div>
     </div>
 
-    <!-- 右：調度 -->
+    <!-- 右：調度 +（洗澡）計時控制 -->
     <div class="card">
       <div class="pill">調度面板</div>
 
@@ -138,17 +140,34 @@
         第三位： <span id="third" class="next">—</span>
       </div>
 
+      <!-- ✅ 洗澡專用：計時控制 -->
+      <div id="showerTimerPanel" style="margin-top:12px; display:none;">
+        <div class="sectionTitle">⏱ 洗澡計時控制（每人 15 分鐘）</div>
+
+        <div class="row">
+          <input id="plannedTimeInput" type="time">
+          <button class="ghost" id="setPlannedBtn">設定預計開始</button>
+        </div>
+        <div class="hint" id="plannedHint">預計開始：—</div>
+
+        <div class="row" style="margin-top:10px">
+          <button class="ghost" id="pauseBtn" style="flex:1">暫停</button>
+          <button class="ghost" id="resumeBtn" style="flex:1">繼續</button>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button class="danger" id="resetTimerBtn" style="flex:1">重設計時（讓下一位重新按開始）</button>
+        </div>
+
+        <div class="hint" id="timerStateHint">計時狀態：—</div>
+      </div>
+
       <div class="row" style="margin-top:10px">
         <button class="ghost" id="clearCurrentBtn" style="flex:1">清空 current</button>
         <button class="danger" id="clearQueueBtn" style="flex:1">清空 queue</button>
       </div>
 
-      <div class="row" style="margin-top:10px">
-        <input id="adminAddName" placeholder="管理員新增：輸入名字" maxlength="20">
-        <button class="ghost" id="adminAddBtn">新增到隊伍</button>
-      </div>
-
-      <div class="hint">可「設為現在」/「↑↓調整順序」/「刪除」都在這裡做。</div>
+      <div class="hint">排序/設為現在/刪除在下面隊伍操作。</div>
       <div id="adminQueueBox"></div>
     </div>
 
@@ -159,7 +178,7 @@
 
 </div>
 
-<!-- 登入遮罩 -->
+<!-- 登入遮罩（不顯示密碼提示） -->
 <div class="loginMask" id="loginMask">
   <div class="loginBox">
     <h2 style="margin:0 0 8px;">管理員登入</h2>
@@ -177,14 +196,14 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
 import {
-  getDatabase, ref, set, push, remove, onValue, get
+  getDatabase, ref, set, push, remove, onValue
 } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
-/* ✅ 密碼只在 JS，不顯示 */
+/* 密碼只在 JS */
 const ADMIN_PASSWORD = "g8g8";
-
-/* ✅ 固定一個 key，避免自動登出（你之前就是 key 亂掉） */
 const LS_KEY = "camp_admin_ok";
+
+const DURATION_MS = 15 * 60 * 1000;
 
 const firebaseConfig = {
   apiKey: "AIzaSyBSQAmMKvFjuANWhmZJAYHCwaIUTcwz6A8",
@@ -207,16 +226,14 @@ function playBeep(){
   if(p && p.catch) p.catch(()=>{});
 }
 
-/** ===== 登入控制（修正版：不會自動登出）===== */
+/** ===== 登入控制（不自動登出）===== */
 const loginMask = document.getElementById("loginMask");
 const loginState = document.getElementById("loginState");
 const logoutBtn = document.getElementById("logoutBtn");
 const pwInput = document.getElementById("pwInput");
 const loginBtn = document.getElementById("loginBtn");
 
-function isLoggedIn(){
-  return localStorage.getItem(LS_KEY) === "1";
-}
+function isLoggedIn(){ return localStorage.getItem(LS_KEY) === "1"; }
 function applyLoginUI(){
   const ok = isLoggedIn();
   loginMask.style.display = ok ? "none" : "flex";
@@ -234,15 +251,8 @@ loginBtn.addEventListener("click", ()=>{
   pwInput.value = "";
   applyLoginUI();
 });
-
-pwInput.addEventListener("keydown", (e)=>{
-  if(e.key === "Enter") loginBtn.click();
-});
-
-logoutBtn.addEventListener("click", ()=>{
-  localStorage.removeItem(LS_KEY);
-  applyLoginUI();
-});
+pwInput.addEventListener("keydown", (e)=>{ if(e.key==="Enter") loginBtn.click(); });
+logoutBtn.addEventListener("click", ()=>{ localStorage.removeItem(LS_KEY); applyLoginUI(); });
 
 /** ===== rooms + 調度 ===== */
 let mode = "shower";
@@ -250,9 +260,12 @@ let roomId = "";
 let roomMap = {};
 let queueCache = [];
 
-let unsubRooms = null;
-let unsubCurrent = null;
-let unsubQueue = null;
+let unsubRooms=null, unsubCurrent=null, unsubQueue=null;
+
+// shower timer listeners
+let unsubPlanned=null, unsubTimer=null;
+let plannedStartAt = null;
+let timer = null;
 
 const tabShower = document.getElementById("tabShower");
 const tabWasher = document.getElementById("tabWasher");
@@ -264,16 +277,37 @@ const nextEl = document.getElementById("next");
 const thirdEl = document.getElementById("third");
 const adminQueueBox = document.getElementById("adminQueueBox");
 
+const showerTimerPanel = document.getElementById("showerTimerPanel");
+const plannedTimeInput = document.getElementById("plannedTimeInput");
+const setPlannedBtn = document.getElementById("setPlannedBtn");
+const plannedHint = document.getElementById("plannedHint");
+const pauseBtn = document.getElementById("pauseBtn");
+const resumeBtn = document.getElementById("resumeBtn");
+const resetTimerBtn = document.getElementById("resetTimerBtn");
+const timerStateHint = document.getElementById("timerStateHint");
+
 function roomsRef(){ return ref(db, `queues/${mode}/rooms`); }
 function roomRoot(){ return `queues/${mode}/rooms/${roomId}`; }
 function stateCurrentRef(){ return ref(db, `${roomRoot()}/state/current`); }
 function queueRef(){ return ref(db, `${roomRoot()}/queue`); }
+
+function scheduleRef(){ return ref(db, `${roomRoot()}/schedule/plannedStartAt`); }
+function timerRef(){ return ref(db, `${roomRoot()}/timer`); }
+
+function fmtHHMM(ms){
+  if(!ms) return "—";
+  const d = new Date(ms);
+  const hh = String(d.getHours()).padStart(2,"0");
+  const mm = String(d.getMinutes()).padStart(2,"0");
+  return `${hh}:${mm}`;
+}
 
 function setMode(next){
   mode = next;
   tabShower.classList.toggle("active", mode==="shower");
   tabWasher.classList.toggle("active", mode==="washer");
   roomId = "";
+  attachShowerPanel(); // show/hide
   loadRooms();
 }
 tabShower.addEventListener("click", ()=>setMode("shower"));
@@ -282,8 +316,15 @@ tabWasher.addEventListener("click", ()=>setMode("washer"));
 function detachRoomListeners(){
   if(unsubCurrent) unsubCurrent();
   if(unsubQueue) unsubQueue();
-  unsubCurrent = null;
-  unsubQueue = null;
+  unsubCurrent=unsubQueue=null;
+
+  if(unsubPlanned) unsubPlanned();
+  if(unsubTimer) unsubTimer();
+  unsubPlanned=unsubTimer=null;
+}
+
+function attachShowerPanel(){
+  showerTimerPanel.style.display = (mode==="shower") ? "block" : "none";
 }
 
 function renderRooms(){
@@ -296,8 +337,6 @@ function renderRooms(){
     roomSelect.appendChild(opt);
     roomHint.textContent = "目前沒有房間/機台，請先新增。";
     roomId = "";
-    queueCache = [];
-    renderQueuePanel();
     return;
   }
 
@@ -336,6 +375,21 @@ function renderQueuePanel(){
   });
 }
 
+function renderShowerTimerPanel(){
+  if(mode!=="shower" || !roomId){
+    plannedHint.textContent = "預計開始：—";
+    timerStateHint.textContent = "計時狀態：—";
+    return;
+  }
+  plannedHint.textContent = `預計開始：${plannedStartAt ? fmtHHMM(plannedStartAt) : "—"}`;
+
+  if(!timer || !timer.startAt){
+    timerStateHint.textContent = "計時狀態：未開始（等現在洗澡的人按開始）";
+    return;
+  }
+  timerStateHint.textContent = timer.isRunning ? "計時狀態：進行中" : "計時狀態：暫停中";
+}
+
 function attachRoomListeners(){
   detachRoomListeners();
   if(!roomId) return;
@@ -356,16 +410,28 @@ function attachRoomListeners(){
     queueCache = arr;
     renderQueuePanel();
   });
+
+  if(mode==="shower"){
+    unsubPlanned = onValue(scheduleRef(), (snap)=>{
+      plannedStartAt = snap.exists() && snap.val() ? Number(snap.val()) : null;
+      renderShowerTimerPanel();
+    });
+
+    unsubTimer = onValue(timerRef(), (snap)=>{
+      timer = snap.exists() ? (snap.val() || null) : null;
+      renderShowerTimerPanel();
+    });
+  }
 }
 
 function loadRooms(){
   if(unsubRooms) unsubRooms();
   roomHint.textContent = "載入中…";
-
   unsubRooms = onValue(roomsRef(), (snap)=>{
     roomMap = snap.val() || {};
     renderRooms();
     attachRoomListeners();
+    attachShowerPanel();
   });
 }
 
@@ -395,13 +461,80 @@ document.getElementById("deleteRoomBtn").addEventListener("click", async ()=>{
   roomId = "";
   queueCache = [];
   renderQueuePanel();
+  renderShowerTimerPanel();
 });
 
+/** ====== 洗澡：預計開始 / 暫停 / 繼續 / 重設 ====== */
+setPlannedBtn.addEventListener("click", async ()=>{
+  if(mode!=="shower") return;
+  if(!isLoggedIn()) return alert("請先登入管理員");
+  if(!roomId) return alert("請先選房間");
+
+  const t = String(plannedTimeInput.value || "");
+  if(!t) return alert("請選擇時間（HH:MM）");
+
+  const [hh, mm] = t.split(":").map(x=>Number(x));
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0, 0);
+  await set(scheduleRef(), d.getTime());
+});
+
+pauseBtn.addEventListener("click", async ()=>{
+  if(mode!=="shower") return;
+  if(!isLoggedIn()) return alert("請先登入管理員");
+  if(!roomId) return alert("請先選房間");
+  if(!timer || !timer.startAt || !timer.isRunning) return;
+
+  const now = Date.now();
+  const newTimer = {
+    durationMs: timer.durationMs || DURATION_MS,
+    startAt: timer.startAt,
+    isRunning: false,
+    pausedAt: now,
+    pausedTotalMs: timer.pausedTotalMs || 0
+  };
+  await set(timerRef(), newTimer);
+});
+
+resumeBtn.addEventListener("click", async ()=>{
+  if(mode!=="shower") return;
+  if(!isLoggedIn()) return alert("請先登入管理員");
+  if(!roomId) return alert("請先選房間");
+  if(!timer || !timer.startAt || timer.isRunning) return;
+  if(!timer.pausedAt) return;
+
+  const now = Date.now();
+  const added = now - timer.pausedAt;
+  const newTimer = {
+    durationMs: timer.durationMs || DURATION_MS,
+    startAt: timer.startAt,
+    isRunning: true,
+    pausedAt: null,
+    pausedTotalMs: (timer.pausedTotalMs || 0) + Math.max(0, added)
+  };
+  await set(timerRef(), newTimer);
+});
+
+resetTimerBtn.addEventListener("click", async ()=>{
+  if(mode!=="shower") return;
+  if(!isLoggedIn()) return alert("請先登入管理員");
+  if(!roomId) return alert("請先選房間");
+  if(!confirm("確定重設計時？（會讓目前/下一位重新按開始）")) return;
+
+  await set(timerRef(), { durationMs: DURATION_MS, startAt: null, isRunning: false, pausedAt: null, pausedTotalMs: 0 });
+});
+
+/** ===== 清空 current / queue（原本功能）===== */
 document.getElementById("clearCurrentBtn").addEventListener("click", async ()=>{
   if(!isLoggedIn()) return alert("請先登入管理員");
   if(!roomId) return alert("請先選房間/機台");
   if(!confirm("確定清空 current？")) return;
   await set(stateCurrentRef(), null);
+
+  // 洗澡：清空 current 同時重設 timer（避免殘留）
+  if(mode==="shower"){
+    await set(timerRef(), { durationMs: DURATION_MS, startAt: null, isRunning: false, pausedAt: null, pausedTotalMs: 0 });
+  }
 });
 
 document.getElementById("clearQueueBtn").addEventListener("click", async ()=>{
@@ -411,15 +544,7 @@ document.getElementById("clearQueueBtn").addEventListener("click", async ()=>{
   await set(queueRef(), null);
 });
 
-document.getElementById("adminAddBtn").addEventListener("click", async ()=>{
-  if(!isLoggedIn()) return alert("請先登入管理員");
-  if(!roomId) return alert("請先選房間/機台");
-  const name = String(document.getElementById("adminAddName").value || "").trim();
-  if(!name) return;
-  await push(queueRef(), { name, ts: Date.now() });
-  document.getElementById("adminAddName").value = "";
-});
-
+/** ===== 管理員隊伍操作（設為現在 / 排序 / 刪除）===== */
 async function rewriteQueueOrderFromCache(){
   const base = Date.now();
   const obj = {};
@@ -450,6 +575,11 @@ adminQueueBox.addEventListener("click", async (e)=>{
     await set(stateCurrentRef(), name);
     await remove(ref(db, `${roomRoot()}/queue/${key}`));
     playBeep();
+
+    // 洗澡：設為現在後，重設 timer（讓他自己按開始）
+    if(mode==="shower"){
+      await set(timerRef(), { durationMs: DURATION_MS, startAt: null, isRunning: false, pausedAt: null, pausedTotalMs: 0 });
+    }
     return;
   }
 
@@ -467,8 +597,8 @@ adminQueueBox.addEventListener("click", async (e)=>{
 });
 
 /** init */
+attachShowerPanel();
 loadRooms();
 </script>
-
 </body>
 </html>
