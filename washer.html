@@ -1,226 +1,432 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>洗衣機排隊系統</title>
 
 <style>
-body {
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #f2f4f8;
-  text-align: center;
-  margin: 0;
-  padding: 20px;
-}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;
+    background: linear-gradient(135deg,#dfe9f3,#ffffff);
+    margin:0; padding:20px; color:#111;
+  }
+  .container{ max-width:560px; margin:auto; }
+  .card{
+    background:#fff; padding:18px; border-radius:18px; margin-bottom:16px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.08);
+  }
+  h1{ text-align:center; font-size:24px; margin:0; }
+  .sub{ text-align:center; opacity:.65; font-size:13px; margin:6px 0 0; }
 
-h1 {
-  margin-bottom: 10px;
-}
+  .status{ font-size:20px; line-height:1.8; }
+  .now{ color:#2c7be5; font-weight:900; }
+  .next{ color:#111; font-weight:900; }
 
-.card {
-  background: white;
-  padding: 20px;
-  margin: 15px auto;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-  max-width: 400px;
-}
+  .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  input{
+    flex:1; min-width:180px;
+    padding:12px 12px; border-radius:12px; border:1px solid #ddd; font-size:16px; outline:none;
+  }
+  input:focus{ border-color:#2c7be5; box-shadow:0 0 0 4px rgba(44,123,229,0.12); }
+  button{
+    padding:12px 14px; border-radius:12px; border:none; font-size:15px; cursor:pointer;
+    white-space:nowrap; font-weight:900;
+  }
+  .join{ background:#2c7be5; color:#fff; }
+  .finish{ width:100%; background:#111; color:#fff; margin-top:12px; }
+  .ghost{ background:#f3f4f6; border:1px solid #e5e7eb; }
+  .danger{ background:#e55353; color:#fff; }
+  .hint{ font-size:13px; opacity:.7; margin-top:10px; }
 
-.current {
-  font-size: 24px;
-  font-weight: bold;
-  color: #007aff;
-}
+  ul{ padding-left:18px; margin:10px 0 0; }
+  li{ margin:6px 0; }
 
-.next {
-  font-size: 18px;
-  margin-top: 8px;
-}
+  /* ===== 準備洗衣動畫區 ===== */
+  .prepLine{
+    margin-top:10px;
+    padding:10px 14px;
+    border-radius:14px;
+    font-weight:900;
+    background:rgba(229,83,83,0.10);
+    border:1px solid rgba(229,83,83,0.28);
+    display:inline-block;
+  }
+  .prepPulse{ animation: prepPulse 1.2s ease-in-out 0s 2; }
+  @keyframes prepPulse{
+    0%{ transform:translateY(0) scale(1); box-shadow:0 0 0 rgba(229,83,83,0); }
+    40%{ transform:translateY(-4px) scale(1.05); box-shadow:0 15px 30px rgba(229,83,83,0.25); }
+    70%{ transform:translateY(0) scale(1); }
+    100%{ transform:translateY(0) scale(1); box-shadow:0 0 0 rgba(229,83,83,0); }
+  }
+  /* ========================== */
 
-.third {
-  margin-top: 6px;
-  color: #ff3b30;
-}
+  .pill{
+    display:inline-block;
+    font-size:12px;
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid #ddd;
+    color:#666;
+  }
+  .adminTop{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+  }
+  .adminPanel{ display:none; margin-top:12px; }
+  .adminPanel.show{ display:block; }
 
-.pulse {
-  animation: pulse 1s infinite;
-}
+  .qitem{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 12px;
+    border:1px solid #eee;
+    border-radius:14px;
+    margin-top:10px;
+    background:#fff;
+  }
+  .qname{ font-weight:900; }
+  .qtools{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  .mini{ padding:8px 10px; border-radius:10px; font-size:13px; font-weight:900; border:0; cursor:pointer; }
+  .miniUpDown{ background:#f3f4f6; border:1px solid #e5e7eb; }
+  .miniDel{ background:#111; color:#fff; }
+  .miniNow{ background:#2c7be5; color:#fff; }
 
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.08); }
-  100% { transform: scale(1); }
-}
-
-button {
-  padding: 10px 18px;
-  border-radius: 8px;
-  border: none;
-  background: #007aff;
-  color: white;
-  font-size: 16px;
-  margin: 5px;
-}
-
-button.danger {
-  background: #ff3b30;
-}
-
-input {
-  padding: 8px;
-  width: 200px;
-  margin: 8px 0;
-}
-
-.admin-panel {
-  margin-top: 20px;
-  display: none;
-}
+  .backLink{
+    display:inline-block;
+    margin:0 0 12px;
+    text-decoration:none;
+    font-weight:900;
+    color:#111;
+    opacity:.8;
+  }
+  .backLink:hover{ opacity:1; }
 </style>
 </head>
+
 <body>
+<div class="container">
 
-<h1>🧺 洗衣機排隊系統</h1>
+  <a class="backLink" href="index.html">← 回首頁</a>
 
-<div class="card">
-  <div>目前使用者</div>
-  <div id="current" class="current">無</div>
-  <div id="next" class="next"></div>
-  <div id="third" class="third"></div>
-</div>
-
-<div class="card">
-  <input type="text" id="nameInput" placeholder="輸入姓名">
-  <br>
-  <button onclick="joinQueue()">加入排隊</button>
-  <button onclick="callNext()">叫下一位</button>
-</div>
-
-<div class="card">
-  <button onclick="toggleAdmin()">管理員模式</button>
-  <div class="admin-panel" id="adminPanel">
-    <button class="danger" onclick="clearCurrent()">清空目前使用者</button>
-    <button class="danger" onclick="clearQueue()">清空隊伍</button>
+  <div class="card">
+    <h1>🧺 洗衣機排隊系統</h1>
+    <p class="sub">（多人即時同步）</p>
   </div>
-</div>
 
-<audio id="beep" preload="auto">
-  <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgAAAAA" type="audio/wav">
-</audio>
+  <div class="card status">
+    目前使用： <span id="current" class="now">—</span><br>
+    下一位： <span id="next" class="next">—</span><br>
+
+    <div id="prepLine" class="prepLine" style="display:none;">
+      <span id="next2">—</span> 準備洗衣
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <input id="nameInput" placeholder="輸入名字" maxlength="20">
+      <button class="join" id="joinBtn">加入排隊</button>
+    </div>
+
+    <button class="finish" id="doneBtn">我洗好了 → 叫下一位</button>
+    <div class="hint">（會跳出確認視窗 + 播放提示音）</div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 8px;">排隊名單</h3>
+    <div id="queueEmpty" style="opacity:.6;">（目前沒有人排隊）</div>
+    <ul id="queueList"></ul>
+  </div>
+
+  <!-- 工作人員 -->
+  <div class="card">
+    <div class="adminTop">
+      <div class="pill">🛠 工作人員控制</div>
+      <button class="ghost" id="adminToggleBtn">工作人員登入 / 退出</button>
+    </div>
+
+    <div id="adminPanel" class="adminPanel">
+      <div class="hint">管理員可調整順序 / 刪除 / 設為目前使用</div>
+
+      <div class="row" style="margin-top:10px">
+        <input id="adminAddName" placeholder="管理員新增：輸入名字" maxlength="20">
+        <button class="ghost" id="adminAddBtn">新增到隊伍</button>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button class="ghost" id="adminClearCurrentBtn" style="flex:1">清空「目前使用」</button>
+        <button class="danger" id="adminClearQueueBtn" style="flex:1">清空整個隊伍</button>
+      </div>
+
+      <div id="adminQueueBox"></div>
+    </div>
+  </div>
+
+  <audio id="beep" preload="auto"
+    src="data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQwAAAAA/////wAAAP////8AAAD/////AAAA/////wAAAP////8AAAD/////AAAA/////wAAAP////8="></audio>
+
+</div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
 import {
-  getDatabase,
-  ref,
-  push,
-  set,
-  onValue,
-  remove,
-  get,
-  child
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  getDatabase, ref, set, push, remove, onValue, get, query, orderByChild, limitToFirst
+} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
-/* 🔥 替換成你的 Firebase 設定 */
+/* ===== 你改這裡：管理員密碼（兩頁可以用同一個）===== */
+const ADMIN_PASSWORD = "1234";
+/* ======================================================= */
+
 const firebaseConfig = {
-  apiKey: "你的APIKEY",
-  authDomain: "你的PROJECT.firebaseapp.com",
-  databaseURL: "https://你的PROJECT-default-rtdb.firebaseio.com",
-  projectId: "你的PROJECT",
-  storageBucket: "你的PROJECT.appspot.com",
-  messagingSenderId: "XXXX",
-  appId: "XXXX"
+  apiKey: "AIzaSyBSQAmMKvFjuANWhmZJAYHCwaIUTcwz6A8",
+  authDomain: "jade-c8e32.firebaseapp.com",
+  databaseURL: "https://jade-c8e32-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "jade-c8e32",
+  storageBucket: "jade-c8e32.firebasestorage.app",
+  messagingSenderId: "381125332620",
+  appId: "1:381125332620:web:642dcf482b06fa3b9f35a9"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-const stateRef = ref(db, "queues/washer/state");
-const queueRef = ref(db, "queues/washer/queue");
+/* ✅ v3 多佇列：洗衣機版路徑 */
+const stateCurrentRef = ref(db, "queues/washer/state/current");   // string | null
+const queueRef = ref(db, "queues/washer/queue");                  // push list {name, ts}
 
 const currentEl = document.getElementById("current");
 const nextEl = document.getElementById("next");
-const thirdEl = document.getElementById("third");
+const next2El = document.getElementById("next2");
+const prepLineEl = document.getElementById("prepLine");
+const listEl = document.getElementById("queueList");
+const emptyEl = document.getElementById("queueEmpty");
 
-let queueData = {};
+const adminPanel = document.getElementById("adminPanel");
+const adminQueueBox = document.getElementById("adminQueueBox");
+const nameInput = document.getElementById("nameInput");
 
-onValue(ref(db, "queues/washer"), (snapshot) => {
-  const data = snapshot.val() || {};
-  const current = data.state?.current || null;
-  queueData = data.queue || {};
+let isAdmin = false;
+let queueCache = []; // [{key, name, ts}]
+let lastPrepName = "";
 
-  currentEl.textContent = current || "無";
+// ---- 音效（iPad 最穩：audio）----
+function playBeep(){
+  const a = document.getElementById("beep");
+  if(!a) return;
+  a.currentTime = 0;
+  const p = a.play();
+  if(p && p.catch) p.catch(()=>{});
+}
 
-  const queueArray = Object.entries(queueData)
-    .map(([id, value]) => ({ id, ...value }))
-    .sort((a,b)=>a.ts-b.ts);
+// ---- 更新顯示（next / next2 + 動畫）----
+function updateNextLines(){
+  nextEl.innerText = queueCache[0]?.name || "—";
 
-  nextEl.textContent = queueArray[0] ? "下一位：" + queueArray[0].name : "";
-  
-  if(queueArray[1]){
-    thirdEl.textContent = queueArray[1].name + " 準備洗衣";
-    thirdEl.classList.add("pulse");
+  const prepName = queueCache[1]?.name || "";
+  if(prepName){
+    next2El.innerText = prepName;
+    prepLineEl.style.display = "inline-block";
+
+    if(prepName !== lastPrepName){
+      lastPrepName = prepName;
+      prepLineEl.classList.remove("prepPulse");
+      void prepLineEl.offsetWidth;
+      prepLineEl.classList.add("prepPulse");
+    }
   }else{
-    thirdEl.textContent = "";
-    thirdEl.classList.remove("pulse");
+    prepLineEl.style.display = "none";
+    lastPrepName = "";
   }
-});
+}
 
-window.joinQueue = async function(){
-  const name = document.getElementById("nameInput").value.trim();
-  if(!name) return alert("請輸入姓名");
-
-  const stateSnap = await get(stateRef);
-  const current = stateSnap.val()?.current;
-
-  if(!current){
-    await set(child(stateRef,"current"), name);
+// ---- 一般名單 render ----
+function renderQueueList(){
+  listEl.innerHTML = "";
+  if(queueCache.length === 0){
+    emptyEl.style.display = "block";
   }else{
-    await push(queueRef, {
-      name: name,
-      ts: Date.now()
+    emptyEl.style.display = "none";
+    queueCache.forEach(q=>{
+      const li = document.createElement("li");
+      li.textContent = q.name;
+      listEl.appendChild(li);
     });
   }
+}
 
-  document.getElementById("nameInput").value = "";
-};
+// ---- 管理員隊伍控制 render ----
+function renderAdminQueue(){
+  adminQueueBox.innerHTML = "";
+  if(!isAdmin) return;
 
-window.callNext = async function(){
-  if(!confirm("確定叫下一位？")) return;
+  queueCache.forEach((q, idx)=>{
+    const row = document.createElement("div");
+    row.className = "qitem";
+    row.innerHTML = `
+      <div class="qname">${idx+1}. ${q.name}</div>
+      <div class="qtools">
+        <button class="mini miniNow" data-act="now" data-key="${q.key}">設為目前</button>
+        <button class="mini miniUpDown" data-act="up" data-key="${q.key}">↑</button>
+        <button class="mini miniUpDown" data-act="down" data-key="${q.key}">↓</button>
+        <button class="mini miniDel" data-act="del" data-key="${q.key}">刪</button>
+      </div>
+    `;
+    adminQueueBox.appendChild(row);
+  });
+}
 
-  const queueArray = Object.entries(queueData)
-    .map(([id,value])=>({id,...value}))
-    .sort((a,b)=>a.ts-b.ts);
+// ---- 監聽 current ----
+onValue(stateCurrentRef, (snap)=>{
+  currentEl.innerText = (snap.exists() && snap.val()) ? snap.val() : "—";
+});
 
-  if(queueArray.length === 0){
-    await set(child(stateRef,"current"), null);
+// ---- 監聽 queue（用 ts 排序）----
+onValue(queueRef, (snap)=>{
+  const data = snap.val() || {};
+  const arr = Object.entries(data).map(([key, v]) => ({
+    key,
+    name: v?.name ?? "",
+    ts: v?.ts ?? 0
+  })).filter(x => String(x.name).trim());
+
+  arr.sort((a,b)=>a.ts-b.ts);
+  queueCache = arr;
+
+  renderQueueList();
+  updateNextLines();
+  renderAdminQueue();
+});
+
+// ---- 加入排隊：若 current 空 -> 直接當 current；不然 push queue ----
+document.getElementById("joinBtn").addEventListener("click", async ()=>{
+  const name = String(nameInput.value || "").trim();
+  if(!name) return alert("請輸入名字");
+
+  const curSnap = await get(stateCurrentRef);
+  const cur = (curSnap.exists() ? String(curSnap.val() || "") : "").trim();
+
+  if(!cur){
+    await set(stateCurrentRef, name);
+  }else{
+    await push(queueRef, { name, ts: Date.now() });
+  }
+  nameInput.value = "";
+});
+
+// ---- 叫下一位（確認 + 音效）----
+document.getElementById("doneBtn").addEventListener("click", async ()=>{
+  if(!confirm("確定你洗好了，要叫下一位嗎？")) return;
+
+  // 取 queue 第一個（用 ts）
+  const q = query(queueRef, orderByChild("ts"), limitToFirst(1));
+  const snap = await get(q);
+
+  if(!snap.exists()){
+    await set(stateCurrentRef, null);
+    playBeep();
     return;
   }
 
-  const next = queueArray[0];
-  await set(child(stateRef,"current"), next.name);
-  await remove(ref(db,"queues/washer/queue/"+next.id));
+  const firstKey = Object.keys(snap.val())[0];
+  const nextName = snap.val()[firstKey]?.name || "";
 
-  document.getElementById("beep").play();
-};
+  await set(stateCurrentRef, nextName);
+  await remove(ref(db, `queues/washer/queue/${firstKey}`));
+  playBeep();
+});
 
-window.clearCurrent = async function(){
-  await set(child(stateRef,"current"), null);
-};
-
-window.clearQueue = async function(){
-  await remove(queueRef);
-};
-
-window.toggleAdmin = function(){
-  const password = prompt("輸入管理員密碼");
-  if(password === "admin123"){
-    document.getElementById("adminPanel").style.display = "block";
+// ---- 管理員登入/退出 ----
+document.getElementById("adminToggleBtn").addEventListener("click", ()=>{
+  if(!isAdmin){
+    const pw = prompt("輸入工作人員密碼：");
+    if(pw === null) return;
+    if(pw !== ADMIN_PASSWORD) return alert("密碼錯誤");
+    isAdmin = true;
+    adminPanel.classList.add("show");
+    renderAdminQueue();
+    alert("工作人員模式已開啟 ✅");
   }else{
-    alert("密碼錯誤");
+    isAdmin = false;
+    adminPanel.classList.remove("show");
+    adminQueueBox.innerHTML = "";
+    alert("已退出工作人員模式");
   }
-};
+});
+
+// ---- 管理員新增到隊伍 ----
+document.getElementById("adminAddBtn").addEventListener("click", async ()=>{
+  if(!isAdmin) return alert("請先登入工作人員模式");
+  const name = String(document.getElementById("adminAddName").value || "").trim();
+  if(!name) return;
+  await push(queueRef, { name, ts: Date.now() });
+  document.getElementById("adminAddName").value = "";
+});
+
+// ---- 管理員清空 current ----
+document.getElementById("adminClearCurrentBtn").addEventListener("click", async ()=>{
+  if(!isAdmin) return alert("請先登入工作人員模式");
+  if(!confirm("確定清空「目前使用」？")) return;
+  await set(stateCurrentRef, null);
+});
+
+// ---- 管理員清空 queue ----
+document.getElementById("adminClearQueueBtn").addEventListener("click", async ()=>{
+  if(!isAdmin) return alert("請先登入工作人員模式");
+  if(!confirm("確定清空整個隊伍？")) return;
+  await set(queueRef, null);
+});
+
+// ---- 管理員：上/下移 重寫 ts ----
+async function rewriteQueueOrderFromCache(){
+  const base = Date.now();
+  const obj = {};
+  queueCache.forEach((q,i)=>{ obj[q.key] = { name:q.name, ts: base+i }; });
+  await set(queueRef, Object.keys(obj).length ? obj : null);
+}
+
+// ---- 管理員隊伍操作 ----
+adminQueueBox.addEventListener("click", async (e)=>{
+  const btn = e.target.closest("button");
+  if(!btn) return;
+  if(!isAdmin) return alert("請先登入工作人員模式");
+
+  const act = btn.dataset.act;
+  const key = btn.dataset.key;
+  const idx = queueCache.findIndex(x=>x.key===key);
+  if(idx < 0) return;
+
+  if(act==="del"){
+    if(!confirm("確定移除？")) return;
+    await remove(ref(db, `queues/washer/queue/${key}`));
+    return;
+  }
+
+  if(act==="now"){
+    const name = queueCache[idx].name;
+    if(!confirm(`確定設「${name}」為目前使用？（並從隊伍移除）`)) return;
+    await set(stateCurrentRef, name);
+    await remove(ref(db, `queues/washer/queue/${key}`));
+    playBeep();
+    return;
+  }
+
+  if(act==="up" && idx>0){
+    [queueCache[idx-1], queueCache[idx]] = [queueCache[idx], queueCache[idx-1]];
+    await rewriteQueueOrderFromCache();
+    return;
+  }
+
+  if(act==="down" && idx<queueCache.length-1){
+    [queueCache[idx+1], queueCache[idx]] = [queueCache[idx], queueCache[idx+1]];
+    await rewriteQueueOrderFromCache();
+    return;
+  }
+});
 </script>
 
 </body>
