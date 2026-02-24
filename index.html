@@ -3,66 +3,167 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>營隊排隊系統</title>
-<style>
-  body{
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;
-    background: linear-gradient(135deg,#dfe9f3,#ffffff);
-    margin:0; padding:20px; color:#111;
-  }
-  .container{ max-width:560px; margin:auto; }
-  .card{
-    background:#fff; padding:18px; border-radius:18px; margin-bottom:16px;
-    box-shadow:0 10px 30px rgba(0,0,0,0.08);
-  }
-  h1{ text-align:center; font-size:24px; margin:0; }
-  .sub{ text-align:center; opacity:.65; font-size:13px; margin:6px 0 0; }
+<title>管理員介面</title>
 
-  .btn{
-    display:block;
-    text-decoration:none;
-    text-align:center;
-    padding:14px 16px;
-    border-radius:14px;
-    font-weight:900;
-    margin-top:12px;
-    border:1px solid #e5e7eb;
-    background:#f3f4f6;
-    color:#111;
-  }
-  .btn.primary{
-    background:#2c7be5;
-    border-color:#2c7be5;
-    color:#fff;
-  }
-  .btn.dark{
-    background:#111;
-    border-color:#111;
-    color:#fff;
-  }
-  .hint{ font-size:13px; opacity:.7; margin-top:10px; text-align:center; }
+<style>
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;
+  background: linear-gradient(135deg,#dfe9f3,#ffffff);
+  margin:0; padding:20px; color:#111;
+}
+.container{ max-width:980px; margin:auto; }
+.card{
+  background:#fff; padding:18px; border-radius:18px; margin-bottom:16px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.08);
+}
+h1{ margin:0; font-size:22px; }
+.sub{ opacity:.65; font-size:13px; margin-top:6px; }
+
+.topBar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+a.back{
+  text-decoration:none;
+  font-weight:900;
+  color:#111;
+  opacity:.8;
+}
+a.back:hover{ opacity:1; }
+
+.loginMask{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+
+.loginBox{
+  background:#fff;
+  border-radius:18px;
+  padding:20px;
+  max-width:420px;
+  width:100%;
+  box-shadow:0 10px 40px rgba(0,0,0,.2);
+}
+
+input{
+  width:100%;
+  padding:12px;
+  border-radius:12px;
+  border:1px solid #ddd;
+  font-size:16px;
+  margin-bottom:10px;
+}
+
+button{
+  width:100%;
+  padding:12px;
+  border-radius:12px;
+  border:none;
+  background:#2c7be5;
+  color:#fff;
+  font-weight:900;
+  font-size:15px;
+  cursor:pointer;
+}
+button:hover{ opacity:.9; }
+
+.statusTag{
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ddd;
+}
 </style>
 </head>
 
 <body>
+
 <div class="container">
 
-  <div class="card">
-    <h1>🏕 營隊排隊系統</h1>
-    <p class="sub">（rooms 版：可多房間 / 多機台）</p>
+  <div class="card topBar">
+    <div>
+      <h1>🛠 管理員介面</h1>
+      <div class="sub">新增房間 / 排序 / 調度 / 刪除</div>
+    </div>
+    <div>
+      <span class="statusTag" id="loginState">未登入</span>
+      &nbsp;
+      <a class="back" href="index.html">← 回首頁</a>
+    </div>
   </div>
 
-  <div class="card">
-    <a class="btn primary" href="shower.html">🚿 洗澡排隊</a>
-    <a class="btn dark" href="washer.html">🧺 洗衣機排隊</a>
-    <div class="hint">使用者請進入洗澡 / 洗衣頁面，選擇房間/機台後加入隊伍</div>
-  </div>
-
-  <div class="card">
-    <a class="btn" href="admin.html">🛠 管理員介面（新增房間 / 調度）</a>
-    <div class="hint">管理員密碼：g8g8</div>
-  </div>
+  <!-- 你原本的 rooms 管理 / 調度 UI 放這裡 -->
+  <!-- 這裡故意不顯示任何密碼資訊 -->
 
 </div>
+
+<!-- 登入遮罩 -->
+<div class="loginMask" id="loginMask">
+  <div class="loginBox">
+    <h2 style="margin-top:0;">管理員登入</h2>
+
+    <!-- ✅ 已完全移除密碼提示 -->
+    <input id="pwInput" type="password" placeholder="輸入管理員密碼">
+
+    <button id="loginBtn">登入</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+import { getDatabase } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+
+/* ✅ 密碼只存在 JS，不顯示 */
+const ADMIN_PASSWORD = "g8g8";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBSQAmMKvFjuANWhmZJAYHCwaIUTcwz6A8",
+  authDomain: "jade-c8e32.firebaseapp.com",
+  databaseURL: "https://jade-c8e32-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "jade-c8e32",
+  storageBucket: "jade-c8e32.firebasestorage.app",
+  messagingSenderId: "381125332620",
+  appId: "1:381125332620:web:642dcf482b06fa3b9f35a9"
+};
+
+initializeApp(firebaseConfig);
+getDatabase();
+
+const loginMask = document.getElementById("loginMask");
+const loginState = document.getElementById("loginState");
+const pwInput = document.getElementById("pwInput");
+const loginBtn = document.getElementById("loginBtn");
+
+function setLoggedIn(ok){
+  localStorage.setItem("camp_admin_ok", ok ? "1" : "0");
+  loginMask.style.display = ok ? "none" : "flex";
+  loginState.textContent = ok ? "已登入" : "未登入";
+}
+
+if(localStorage.getItem("camp_admin_ok")==="1"){
+  setLoggedIn(true);
+}
+
+loginBtn.addEventListener("click", ()=>{
+  if(pwInput.value !== ADMIN_PASSWORD){
+    alert("登入失敗");
+    return;
+  }
+  setLoggedIn(true);
+});
+
+pwInput.addEventListener("keydown", e=>{
+  if(e.key==="Enter") loginBtn.click();
+});
+</script>
+
 </body>
 </html>
