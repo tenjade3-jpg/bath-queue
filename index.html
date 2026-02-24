@@ -1,41 +1,322 @@
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-import { getDatabase, ref, push, onValue } 
-from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>洗澡排隊系統</title>
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBSQAmMKvFjuANWhmZJAYHCwaIUTcwz6A8",
-  authDomain: "jade-c8e32.firebaseapp.com",
-  databaseURL: "https://jade-c8e32-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "jade-c8e32",
-  storageBucket: "jade-c8e32.firebasestorage.app",
-  messagingSenderId: "381125332620",
-  appId: "1:381125332620:web:642dcf482b06fa3b9f35a9"
-};
+  <style>
+    :root{
+      --bg:#ffffff;
+      --card:#ffffff;
+      --border:#d9d9d9;
+      --muted:#666;
+      --black:#111;
+      --radius:18px;
+    }
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const queueRef = ref(db, "queue");
+    body{
+      margin:0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", "PingFang TC",
+                   "Helvetica Neue", Arial, "Microsoft JhengHei", sans-serif;
+      background: var(--bg);
+      color:#111;
+    }
 
-const input = document.querySelector("#nameInput");
-const addBtn = document.querySelector("#addBtn");
-const listDiv = document.querySelector("#list");
+    .wrap{
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 18px 16px 40px;
+    }
 
-addBtn.addEventListener("click", () => {
-  const name = input.value.trim();
-  if (!name) return;
+    .card{
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin: 14px 0;
+    }
 
-  push(queueRef, { name });
-  input.value = "";
-});
+    .title{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size: 30px;
+      font-weight: 900;
+      letter-spacing: .5px;
+    }
 
-onValue(queueRef, (snapshot) => {
-  listDiv.innerHTML = "";
-  snapshot.forEach((child) => {
-    const data = child.val();
-    const p = document.createElement("p");
-    p.textContent = data.name;
-    listDiv.appendChild(p);
-  });
-});
-</script>
+    .title .emoji{ font-size: 28px; }
+
+    .status{
+      font-size: 34px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+    .status small{
+      display:block;
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    .row{
+      display:flex;
+      gap: 12px;
+      align-items:center;
+    }
+
+    input{
+      flex:1;
+      font-size: 18px;
+      padding: 14px 14px;
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      outline: none;
+    }
+    input:focus{ border-color:#bdbdbd; }
+
+    button{
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 18px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .btn-black{
+      background: var(--black);
+      color: #fff;
+      white-space: nowrap;
+    }
+
+    .btn-black:active{ transform: scale(0.99); }
+
+    .list-title{
+      font-size: 34px;
+      font-weight: 900;
+    }
+
+    .queue{
+      margin-top: 10px;
+      padding-left: 22px;
+      font-size: 18px;
+      line-height: 1.8;
+    }
+
+    .hint{
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .pill{
+      display:inline-block;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+
+    <!-- 標題 -->
+    <div class="card">
+      <div class="title"><span class="emoji">🚿</span>洗澡排隊系統</div>
+      <div class="pill">Realtime Database</div>
+    </div>
+
+    <!-- 狀態 -->
+    <div class="card">
+      <div class="status">
+        現在洗澡： <span id="nowName">—</span><br>
+        下一位準備： <span id="nextName">—</span>
+        <small>Now / Next</small>
+      </div>
+    </div>
+
+    <!-- 你說的 input div（外框 + 內排版） -->
+    <div class="card" id="inputBox">
+      <div class="row">
+        <input id="nameInput" placeholder="輸入名字（Name）" />
+        <button class="btn-black" id="addBtn">加入排隊</button>
+      </div>
+      <div class="hint" style="margin-top:10px;">
+        ＊如果目前沒人洗澡，你會直接變成「現在洗澡」。
+      </div>
+    </div>
+
+    <!-- 叫下一位 -->
+    <div class="card">
+      <button class="btn-black" id="nextBtn" style="width:100%;">我洗好了 → 叫下一位</button>
+      <div class="hint" style="margin-top:10px;">
+        ＊會把隊伍第一個人叫上來。
+      </div>
+    </div>
+
+    <!-- 排隊名單 -->
+    <div class="card">
+      <div class="list-title">排隊名單</div>
+      <ol class="queue" id="queueList"></ol>
+      <div class="hint" id="queueHint">（目前沒有人排隊）</div>
+    </div>
+
+    <div class="hint">
+      如果按鈕沒反應：請打開瀏覽器 DevTools Console 看是否是 Firebase 規則拒絕（permission denied）。
+    </div>
+
+  </div>
+
+  <script type="module">
+    // Firebase (CDN modular SDK)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+    import {
+      getDatabase, ref, push, set, get, remove,
+      onValue, query, orderByChild, limitToFirst
+    } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+
+    // ✅ 你的 Firebase 設定（你貼的那段）
+    const firebaseConfig = {
+      apiKey: "AIzaSyBSQAmMKvFjuANWhmZJAYHCwaIUTcwz6A8",
+      authDomain: "jade-c8e32.firebaseapp.com",
+      databaseURL: "https://jade-c8e32-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "jade-c8e32",
+      storageBucket: "jade-c8e32.firebasestorage.app",
+      messagingSenderId: "381125332620",
+      appId: "1:381125332620:web:642dcf482b06fa3b9f35a9"
+    };
+
+    // Init
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+
+    // Refs
+    const stateRef = ref(db, "state");      // { current: "名字" }
+    const queueRef = ref(db, "queue");      // push list: {name, ts}
+
+    // UI
+    const nowNameEl  = document.getElementById("nowName");
+    const nextNameEl = document.getElementById("nextName");
+    const queueListEl= document.getElementById("queueList");
+    const queueHintEl= document.getElementById("queueHint");
+    const nameInput  = document.getElementById("nameInput");
+    const addBtn     = document.getElementById("addBtn");
+    const nextBtn    = document.getElementById("nextBtn");
+
+    // Helpers
+    const safeText = (v) => (v && String(v).trim()) ? String(v).trim() : "—";
+
+    function renderQueue(items){
+      queueListEl.innerHTML = "";
+      if (!items.length){
+        queueHintEl.style.display = "block";
+        queueHintEl.textContent = "（目前沒有人排隊）";
+        return;
+      }
+      queueHintEl.style.display = "none";
+      for (const it of items){
+        const li = document.createElement("li");
+        li.textContent = it.name;
+        queueListEl.appendChild(li);
+      }
+    }
+
+    // Live state
+    let currentName = "";
+    let queueItems = [];
+
+    onValue(stateRef, (snap) => {
+      const val = snap.val() || {};
+      currentName = val.current || "";
+      nowNameEl.textContent = safeText(currentName);
+      // nextName 由 queueItems 決定
+      nextNameEl.textContent = safeText(queueItems[0]?.name);
+    });
+
+    // Live queue (sorted by ts)
+    onValue(queueRef, (snap) => {
+      const val = snap.val() || {};
+      const arr = Object.entries(val).map(([key, obj]) => ({
+        key,
+        name: obj?.name ?? "",
+        ts: obj?.ts ?? 0
+      })).filter(x => String(x.name).trim());
+
+      arr.sort((a,b) => a.ts - b.ts);
+      queueItems = arr;
+
+      renderQueue(queueItems);
+      nextNameEl.textContent = safeText(queueItems[0]?.name);
+    });
+
+    // Add to queue
+    addBtn.addEventListener("click", async () => {
+      try{
+        const name = String(nameInput.value || "").trim();
+        if (!name){
+          alert("請輸入名字");
+          return;
+        }
+
+        // 讀一次 state.current
+        const stSnap = await get(stateRef);
+        const stVal = stSnap.val() || {};
+        const cur = String(stVal.current || "").trim();
+
+        if (!cur){
+          // 沒人洗澡 → 直接當現在洗澡
+          await set(stateRef, { current: name });
+        } else {
+          // 有人洗澡 → 加入 queue
+          await push(queueRef, { name, ts: Date.now() });
+        }
+
+        nameInput.value = "";
+        nameInput.focus();
+      } catch (e){
+        console.error(e);
+        alert("加入失敗：可能是 Firebase 規則拒絕（permission denied）或網路問題。請看 Console。");
+      }
+    });
+
+    // Call next
+    nextBtn.addEventListener("click", async () => {
+      try{
+        // 取 queue 第一個
+        const q = query(queueRef, orderByChild("ts"), limitToFirst(1));
+        const snap = await get(q);
+
+        if (!snap.exists()){
+          // 沒人排隊 → 清空 current
+          await set(stateRef, { current: "" });
+          return;
+        }
+
+        // snap.val() 是 { key: {name, ts} }
+        const firstKey = Object.keys(snap.val())[0];
+        const firstObj = snap.val()[firstKey];
+        const nextName = String(firstObj?.name || "").trim();
+
+        // 設定 current = nextName，並把該 queue item 刪掉
+        await set(stateRef, { current: nextName });
+        await remove(ref(db, `queue/${firstKey}`));
+      } catch (e){
+        console.error(e);
+        alert("叫下一位失敗：可能是 Firebase 規則拒絕（permission denied）或網路問題。請看 Console。");
+      }
+    });
+
+    // Enter key = add
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") addBtn.click();
+    });
+  </script>
+</body>
+</html>
