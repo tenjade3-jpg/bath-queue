@@ -24,11 +24,12 @@
   .next{ color:#111; font-weight:900; }
 
   .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-  input{
+  input, select{
     flex:1; min-width:180px;
     padding:12px 12px; border-radius:12px; border:1px solid #ddd; font-size:16px; outline:none;
+    background:#fff;
   }
-  input:focus{ border-color:#2c7be5; box-shadow:0 0 0 4px rgba(44,123,229,0.12); }
+  input:focus, select:focus{ border-color:#2c7be5; box-shadow:0 0 0 4px rgba(44,123,229,0.12); }
   button{
     padding:12px 14px; border-radius:12px; border:none; font-size:15px; cursor:pointer;
     white-space:nowrap; font-weight:900;
@@ -61,41 +62,6 @@
   }
   /* ========================== */
 
-  .pill{
-    display:inline-block;
-    font-size:12px;
-    padding:6px 10px;
-    border-radius:999px;
-    border:1px solid #ddd;
-    color:#666;
-  }
-  .adminTop{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:10px;
-  }
-  .adminPanel{ display:none; margin-top:12px; }
-  .adminPanel.show{ display:block; }
-
-  .qitem{
-    display:flex;
-    gap:10px;
-    align-items:center;
-    justify-content:space-between;
-    padding:10px 12px;
-    border:1px solid #eee;
-    border-radius:14px;
-    margin-top:10px;
-    background:#fff;
-  }
-  .qname{ font-weight:900; }
-  .qtools{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-  .mini{ padding:8px 10px; border-radius:10px; font-size:13px; font-weight:900; border:0; cursor:pointer; }
-  .miniUpDown{ background:#f3f4f6; border:1px solid #e5e7eb; }
-  .miniDel{ background:#111; color:#fff; }
-  .miniNow{ background:#2c7be5; color:#fff; }
-
   .backLink{
     display:inline-block;
     margin:0 0 12px;
@@ -115,7 +81,16 @@
 
   <div class="card">
     <h1>🧺 洗衣機排隊系統</h1>
-    <p class="sub">（多人即時同步）</p>
+    <p class="sub">（多人即時同步 / rooms 版）</p>
+  </div>
+
+  <!-- 機台選擇 -->
+  <div class="card">
+    <div class="row">
+      <select id="roomSelect"></select>
+      <button class="ghost" id="refreshRoomsBtn">重新整理</button>
+    </div>
+    <div class="hint" id="roomHint">載入機台中…</div>
   </div>
 
   <div class="card status">
@@ -143,30 +118,6 @@
     <ul id="queueList"></ul>
   </div>
 
-  <!-- 工作人員 -->
-  <div class="card">
-    <div class="adminTop">
-      <div class="pill">🛠 工作人員控制</div>
-      <button class="ghost" id="adminToggleBtn">工作人員登入 / 退出</button>
-    </div>
-
-    <div id="adminPanel" class="adminPanel">
-      <div class="hint">管理員可調整順序 / 刪除 / 設為目前使用</div>
-
-      <div class="row" style="margin-top:10px">
-        <input id="adminAddName" placeholder="管理員新增：輸入名字" maxlength="20">
-        <button class="ghost" id="adminAddBtn">新增到隊伍</button>
-      </div>
-
-      <div class="row" style="margin-top:10px">
-        <button class="ghost" id="adminClearCurrentBtn" style="flex:1">清空「目前使用」</button>
-        <button class="danger" id="adminClearQueueBtn" style="flex:1">清空整個隊伍</button>
-      </div>
-
-      <div id="adminQueueBox"></div>
-    </div>
-  </div>
-
   <audio id="beep" preload="auto"
     src="data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQwAAAAA/////wAAAP////8AAAD/////AAAA/////wAAAP////8AAAD/////AAAA/////wAAAP////8="></audio>
 
@@ -177,10 +128,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebas
 import {
   getDatabase, ref, set, push, remove, onValue, get, query, orderByChild, limitToFirst
 } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
-
-/* ===== 你改這裡：管理員密碼（兩頁可以用同一個）===== */
-const ADMIN_PASSWORD = "1234";
-/* ======================================================= */
 
 const firebaseConfig = {
   apiKey: "AIzaSyBSQAmMKvFjuANWhmZJAYHCwaIUTcwz6A8",
@@ -195,9 +142,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-/* ✅ v3 多佇列：洗衣機版路徑 */
-const stateCurrentRef = ref(db, "queues/washer/state/current");   // string | null
-const queueRef = ref(db, "queues/washer/queue");                  // push list {name, ts}
+/** -------- UI refs -------- */
+const roomSelect = document.getElementById("roomSelect");
+const roomHint = document.getElementById("roomHint");
 
 const currentEl = document.getElementById("current");
 const nextEl = document.getElementById("next");
@@ -205,16 +152,18 @@ const next2El = document.getElementById("next2");
 const prepLineEl = document.getElementById("prepLine");
 const listEl = document.getElementById("queueList");
 const emptyEl = document.getElementById("queueEmpty");
-
-const adminPanel = document.getElementById("adminPanel");
-const adminQueueBox = document.getElementById("adminQueueBox");
 const nameInput = document.getElementById("nameInput");
 
-let isAdmin = false;
-let queueCache = []; // [{key, name, ts}]
+let roomMap = {};     // {roomId:{name}}
+let roomId = "";      // selected
+let queueCache = [];  // [{key,name,ts}]
 let lastPrepName = "";
 
-// ---- 音效（iPad 最穩：audio）----
+// unsubscribers
+let unsubRooms = null;
+let unsubCurrent = null;
+let unsubQueue = null;
+
 function playBeep(){
   const a = document.getElementById("beep");
   if(!a) return;
@@ -223,7 +172,24 @@ function playBeep(){
   if(p && p.catch) p.catch(()=>{});
 }
 
-// ---- 更新顯示（next / next2 + 動畫）----
+function detachRoomListeners(){
+  if(unsubCurrent) unsubCurrent();
+  if(unsubQueue) unsubQueue();
+  unsubCurrent = null;
+  unsubQueue = null;
+}
+
+function stateCurrentRef(){
+  return ref(db, `queues/washer/rooms/${roomId}/state/current`);
+}
+function queueRef(){
+  return ref(db, `queues/washer/rooms/${roomId}/queue`);
+}
+function roomsRef(){
+  return ref(db, `queues/washer/rooms`);
+}
+
+/** ---- render helpers ---- */
 function updateNextLines(){
   nextEl.innerText = queueCache[0]?.name || "—";
 
@@ -244,7 +210,6 @@ function updateNextLines(){
   }
 }
 
-// ---- 一般名單 render ----
 function renderQueueList(){
   listEl.innerHTML = "";
   if(queueCache.length === 0){
@@ -259,75 +224,105 @@ function renderQueueList(){
   }
 }
 
-// ---- 管理員隊伍控制 render ----
-function renderAdminQueue(){
-  adminQueueBox.innerHTML = "";
-  if(!isAdmin) return;
+function renderRooms(){
+  roomSelect.innerHTML = "";
+  const entries = Object.entries(roomMap || {});
+  if(entries.length === 0){
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "（目前沒有機台）";
+    roomSelect.appendChild(opt);
+    roomId = "";
+    roomHint.textContent = "目前沒有機台，請管理員到 admin.html 新增洗衣機。";
+    return;
+  }
 
-  queueCache.forEach((q, idx)=>{
-    const row = document.createElement("div");
-    row.className = "qitem";
-    row.innerHTML = `
-      <div class="qname">${idx+1}. ${q.name}</div>
-      <div class="qtools">
-        <button class="mini miniNow" data-act="now" data-key="${q.key}">設為目前</button>
-        <button class="mini miniUpDown" data-act="up" data-key="${q.key}">↑</button>
-        <button class="mini miniUpDown" data-act="down" data-key="${q.key}">↓</button>
-        <button class="mini miniDel" data-act="del" data-key="${q.key}">刪</button>
-      </div>
-    `;
-    adminQueueBox.appendChild(row);
+  entries.sort((a,b)=> String(a[1]?.name||"").localeCompare(String(b[1]?.name||""), "zh-Hant"));
+
+  if(!roomId || !roomMap[roomId]) roomId = entries[0][0];
+
+  for(const [id, v] of entries){
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = v?.name ? v.name : id;
+    opt.selected = (id === roomId);
+    roomSelect.appendChild(opt);
+  }
+
+  const selectedName = roomMap?.[roomId]?.name || roomId;
+  roomHint.textContent = `目前選擇：${selectedName}`;
+}
+
+function attachRoomListeners(){
+  detachRoomListeners();
+  if(!roomId) return;
+
+  unsubCurrent = onValue(stateCurrentRef(), (snap)=>{
+    currentEl.innerText = (snap.exists() && snap.val()) ? snap.val() : "—";
+  });
+
+  unsubQueue = onValue(queueRef(), (snap)=>{
+    const data = snap.val() || {};
+    const arr = Object.entries(data).map(([key, v]) => ({
+      key,
+      name: v?.name ?? "",
+      ts: v?.ts ?? 0
+    })).filter(x => String(x.name).trim());
+
+    arr.sort((a,b)=>a.ts-b.ts);
+    queueCache = arr;
+
+    renderQueueList();
+    updateNextLines();
   });
 }
 
-// ---- 監聽 current ----
-onValue(stateCurrentRef, (snap)=>{
-  currentEl.innerText = (snap.exists() && snap.val()) ? snap.val() : "—";
+function loadRooms(){
+  if(unsubRooms) unsubRooms();
+  roomHint.textContent = "載入機台中…";
+
+  unsubRooms = onValue(roomsRef(), (snap)=>{
+    roomMap = snap.val() || {};
+    renderRooms();
+    attachRoomListeners();
+  });
+}
+
+roomSelect.addEventListener("change", ()=>{
+  roomId = roomSelect.value;
+  renderRooms();
+  attachRoomListeners();
 });
 
-// ---- 監聽 queue（用 ts 排序）----
-onValue(queueRef, (snap)=>{
-  const data = snap.val() || {};
-  const arr = Object.entries(data).map(([key, v]) => ({
-    key,
-    name: v?.name ?? "",
-    ts: v?.ts ?? 0
-  })).filter(x => String(x.name).trim());
+document.getElementById("refreshRoomsBtn").addEventListener("click", loadRooms);
 
-  arr.sort((a,b)=>a.ts-b.ts);
-  queueCache = arr;
-
-  renderQueueList();
-  updateNextLines();
-  renderAdminQueue();
-});
-
-// ---- 加入排隊：若 current 空 -> 直接當 current；不然 push queue ----
+/** ---- actions ---- */
 document.getElementById("joinBtn").addEventListener("click", async ()=>{
+  if(!roomId) return alert("目前沒有機台可選，請先請管理員新增。");
+
   const name = String(nameInput.value || "").trim();
   if(!name) return alert("請輸入名字");
 
-  const curSnap = await get(stateCurrentRef);
+  const curSnap = await get(stateCurrentRef());
   const cur = (curSnap.exists() ? String(curSnap.val() || "") : "").trim();
 
   if(!cur){
-    await set(stateCurrentRef, name);
+    await set(stateCurrentRef(), name);
   }else{
-    await push(queueRef, { name, ts: Date.now() });
+    await push(queueRef(), { name, ts: Date.now() });
   }
   nameInput.value = "";
 });
 
-// ---- 叫下一位（確認 + 音效）----
 document.getElementById("doneBtn").addEventListener("click", async ()=>{
+  if(!roomId) return alert("目前沒有機台可選，請先請管理員新增。");
   if(!confirm("確定你洗好了，要叫下一位嗎？")) return;
 
-  // 取 queue 第一個（用 ts）
-  const q = query(queueRef, orderByChild("ts"), limitToFirst(1));
+  const q = query(queueRef(), orderByChild("ts"), limitToFirst(1));
   const snap = await get(q);
 
   if(!snap.exists()){
-    await set(stateCurrentRef, null);
+    await set(stateCurrentRef(), null);
     playBeep();
     return;
   }
@@ -335,98 +330,13 @@ document.getElementById("doneBtn").addEventListener("click", async ()=>{
   const firstKey = Object.keys(snap.val())[0];
   const nextName = snap.val()[firstKey]?.name || "";
 
-  await set(stateCurrentRef, nextName);
-  await remove(ref(db, `queues/washer/queue/${firstKey}`));
+  await set(stateCurrentRef(), nextName);
+  await remove(ref(db, `queues/washer/rooms/${roomId}/queue/${firstKey}`));
   playBeep();
 });
 
-// ---- 管理員登入/退出 ----
-document.getElementById("adminToggleBtn").addEventListener("click", ()=>{
-  if(!isAdmin){
-    const pw = prompt("輸入工作人員密碼：");
-    if(pw === null) return;
-    if(pw !== ADMIN_PASSWORD) return alert("密碼錯誤");
-    isAdmin = true;
-    adminPanel.classList.add("show");
-    renderAdminQueue();
-    alert("工作人員模式已開啟 ✅");
-  }else{
-    isAdmin = false;
-    adminPanel.classList.remove("show");
-    adminQueueBox.innerHTML = "";
-    alert("已退出工作人員模式");
-  }
-});
-
-// ---- 管理員新增到隊伍 ----
-document.getElementById("adminAddBtn").addEventListener("click", async ()=>{
-  if(!isAdmin) return alert("請先登入工作人員模式");
-  const name = String(document.getElementById("adminAddName").value || "").trim();
-  if(!name) return;
-  await push(queueRef, { name, ts: Date.now() });
-  document.getElementById("adminAddName").value = "";
-});
-
-// ---- 管理員清空 current ----
-document.getElementById("adminClearCurrentBtn").addEventListener("click", async ()=>{
-  if(!isAdmin) return alert("請先登入工作人員模式");
-  if(!confirm("確定清空「目前使用」？")) return;
-  await set(stateCurrentRef, null);
-});
-
-// ---- 管理員清空 queue ----
-document.getElementById("adminClearQueueBtn").addEventListener("click", async ()=>{
-  if(!isAdmin) return alert("請先登入工作人員模式");
-  if(!confirm("確定清空整個隊伍？")) return;
-  await set(queueRef, null);
-});
-
-// ---- 管理員：上/下移 重寫 ts ----
-async function rewriteQueueOrderFromCache(){
-  const base = Date.now();
-  const obj = {};
-  queueCache.forEach((q,i)=>{ obj[q.key] = { name:q.name, ts: base+i }; });
-  await set(queueRef, Object.keys(obj).length ? obj : null);
-}
-
-// ---- 管理員隊伍操作 ----
-adminQueueBox.addEventListener("click", async (e)=>{
-  const btn = e.target.closest("button");
-  if(!btn) return;
-  if(!isAdmin) return alert("請先登入工作人員模式");
-
-  const act = btn.dataset.act;
-  const key = btn.dataset.key;
-  const idx = queueCache.findIndex(x=>x.key===key);
-  if(idx < 0) return;
-
-  if(act==="del"){
-    if(!confirm("確定移除？")) return;
-    await remove(ref(db, `queues/washer/queue/${key}`));
-    return;
-  }
-
-  if(act==="now"){
-    const name = queueCache[idx].name;
-    if(!confirm(`確定設「${name}」為目前使用？（並從隊伍移除）`)) return;
-    await set(stateCurrentRef, name);
-    await remove(ref(db, `queues/washer/queue/${key}`));
-    playBeep();
-    return;
-  }
-
-  if(act==="up" && idx>0){
-    [queueCache[idx-1], queueCache[idx]] = [queueCache[idx], queueCache[idx-1]];
-    await rewriteQueueOrderFromCache();
-    return;
-  }
-
-  if(act==="down" && idx<queueCache.length-1){
-    [queueCache[idx+1], queueCache[idx]] = [queueCache[idx], queueCache[idx+1]];
-    await rewriteQueueOrderFromCache();
-    return;
-  }
-});
+/** init */
+loadRooms();
 </script>
 
 </body>
