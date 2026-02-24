@@ -1,94 +1,105 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>營隊洗澡排隊</title>
+
 <style>
-body { font-family: sans-serif; padding: 20px; }
-.card { border:1px solid #ccc; padding:15px; margin:10px 0; border-radius:10px; }
-.big { font-size:22px; font-weight:bold; }
-button { padding:10px 15px; border:none; border-radius:8px; background:black; color:white; }
-input { padding:10px; border-radius:8px; border:1px solid #ccc; }
+body { font-family: sans-serif; padding:20px; background:#f5f5f5; }
+.card { background:white; padding:20px; margin:15px 0; border-radius:12px; border:1px solid #ddd; }
+h1 { margin:0; }
+button { padding:12px 16px; border-radius:10px; border:none; cursor:pointer; }
+.black { background:black; color:white; }
+input { padding:12px; border-radius:10px; border:1px solid #ccc; }
 </style>
 </head>
+
 <body>
 
 <div class="card">
-  <div class="big">🚿 洗澡排隊系統</div>
+<h1>🚿 洗澡排隊系統</h1>
 </div>
 
 <div class="card">
-  <div class="big">現在洗澡： <span id="current">—</span></div>
-  <div class="big">下一位準備： <span id="next">—</span></div>
+<h2>現在洗澡：<span id="current">—</span></h2>
+<h2>下一位準備：<span id="next">—</span></h2>
 </div>
 
 <div class="card">
-  <input id="nameInput" placeholder="輸入名字">
-  <button onclick="joinQueue()">加入排隊</button>
+<input id="name" placeholder="輸入名字">
+<button class="black" onclick="join()">加入排隊</button>
 </div>
 
 <div class="card">
-  <button onclick="finish()">我洗好了 → 叫下一位</button>
+<button onclick="done()">我洗好了 → 叫下一位</button>
 </div>
 
 <div class="card">
-  <div class="big">排隊名單</div>
-  <ol id="queueList"></ol>
+<h2>排隊名單</h2>
+<ul id="list"></ul>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 
+<script>
 const firebaseConfig = {
-  apiKey: "你的apiKey",
-  authDomain: "你的authDomain",
-  databaseURL: "你的databaseURL",
-  projectId: "你的projectId",
-  storageBucket: "你的storageBucket",
-  messagingSenderId: "你的messagingSenderId",
-  appId: "你的appId"
+  apiKey: "換成你的",
+  authDomain: "換成你的",
+  databaseURL: "換成你的",
+  projectId: "換成你的",
+  storageBucket: "換成你的",
+  messagingSenderId: "換成你的",
+  appId: "換成你的"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const queueRef = ref(db, "bathQueue");
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-onValue(queueRef, (snap) => {
-  const queue = snap.val() || [];
-  document.getElementById("current").innerText = queue[0] || "—";
-  document.getElementById("next").innerText = queue[1] || "—";
-  let list = document.getElementById("queueList");
+const queueRef = db.ref("queue");
+const stateRef = db.ref("state");
+
+queueRef.on("value", snap => {
+  const list = document.getElementById("list");
   list.innerHTML = "";
-  queue.forEach(name=>{
-    let li = document.createElement("li");
-    li.innerText = name;
+  const data = snap.val() || {};
+  Object.keys(data).forEach(key=>{
+    const li = document.createElement("li");
+    li.textContent = data[key];
     list.appendChild(li);
   });
 });
 
-window.joinQueue = async function(){
-  let name = document.getElementById("nameInput").value.trim();
-  if(!name) return;
-  await runTransaction(queueRef, (queue)=>{
-    queue = queue || [];
-    if(queue.includes(name)) return queue;
-    queue.push(name);
-    return queue;
-  });
-  document.getElementById("nameInput").value="";
-};
+stateRef.on("value", snap=>{
+  const s = snap.val() || {};
+  document.getElementById("current").textContent = s.current || "—";
+  document.getElementById("next").textContent = s.next || "—";
+});
 
-window.finish = async function(){
-  if(confirm("確定洗好了嗎？")){
-    await runTransaction(queueRef, (queue)=>{
-      queue = queue || [];
-      queue.shift();
-      return queue;
-    });
+function join(){
+  const name = document.getElementById("name").value.trim();
+  if(!name) return alert("請輸入名字");
+  queueRef.push(name);
+  document.getElementById("name").value="";
+}
+
+async function done(){
+  const snap = await queueRef.limitToFirst(2).once("value");
+  const data = snap.val();
+  if(!data){
+    stateRef.set({current:"", next:""});
+    return;
   }
-};
+
+  const keys = Object.keys(data);
+  const current = data[keys[0]];
+  const next = data[keys[1]] || "";
+
+  stateRef.set({current, next});
+  await queueRef.child(keys[0]).remove();
+}
 </script>
 
 </body>
