@@ -158,7 +158,7 @@
 
   <div class="card">
     <button class="finish" id="doneBtn">我洗好了 → 叫下一位</button>
-    <div class="hint">（叫下一位會重置計時，讓下一位再按開始）</div>
+    <div class="hint">（暫停期間不能叫下一位）</div>
   </div>
 
   <div class="card">
@@ -200,6 +200,8 @@ const prepLineEl = document.getElementById("prepLine");
 const remainEl = document.getElementById("remain");
 const startTimerBtn = document.getElementById("startTimerBtn");
 const lockMsg = document.getElementById("lockMsg");
+
+const doneBtn = document.getElementById("doneBtn");
 
 const listEl = document.getElementById("queueList");
 const emptyEl = document.getElementById("queueEmpty");
@@ -308,6 +310,18 @@ function canStartNow(){
   return { ok:true, reason:"" };
 }
 
+function renderDoneBtnLock(){
+  if(isPaused){
+    doneBtn.disabled = true;
+    doneBtn.style.opacity = "0.55";
+    doneBtn.style.cursor = "not-allowed";
+  }else{
+    doneBtn.disabled = false;
+    doneBtn.style.opacity = "1";
+    doneBtn.style.cursor = "pointer";
+  }
+}
+
 function renderTimerUI(){
   const curName = (currentEl.textContent || "").trim();
   const nowMs = Date.now();
@@ -316,7 +330,6 @@ function renderTimerUI(){
   remainEl.textContent = fmtRemain(remainMs);
   remainEl.classList.toggle("danger", (remainMs!=null && remainMs<=60*1000));
 
-  // 顯示開始按鈕條件：有 current + timer未開始 + 允許開始
   const hasCurrent = !!curName && curName !== "—";
   const notStarted = (!timer || !timer.startAt);
   const gate = canStartNow();
@@ -324,7 +337,6 @@ function renderTimerUI(){
   const showStart = hasCurrent && notStarted && gate.ok;
   startTimerBtn.style.display = showStart ? "inline-block" : "none";
 
-  // 顯示鎖定原因（有 current 且未開始，但被 gate 擋住）
   if(hasCurrent && notStarted && !gate.ok){
     lockMsg.style.display = "block";
     lockMsg.textContent = gate.reason;
@@ -332,6 +344,8 @@ function renderTimerUI(){
     lockMsg.style.display = "none";
     lockMsg.textContent = "";
   }
+
+  renderDoneBtnLock();
 }
 
 function estimateBaseStartMs(){
@@ -450,7 +464,8 @@ startTimerBtn.addEventListener("click", async ()=>{
   await set(timerRef(), { durationMs: DURATION_MS, startAt: Date.now(), isRunning: true, pausedAt: null, pausedTotalMs: 0 });
 });
 
-document.getElementById("doneBtn").addEventListener("click", async ()=>{
+doneBtn.addEventListener("click", async ()=>{
+  if(isPaused) return alert("目前已被管理員暫停，暫停期間不能叫下一位。");
   if(!roomId) return alert("目前沒有房間可選，請先請管理員新增。");
   if(!confirm("確定你洗好了，要叫下一位嗎？")) return;
 
