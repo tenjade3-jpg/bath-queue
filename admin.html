@@ -21,119 +21,144 @@
   .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 
   input, select{
-    padding:12px 12px;
-    border-radius:12px;
-    border:1px solid #ddd;
-    font-size:16px;
-    outline:none;
-    min-width:220px;
+    padding:12px 12px; border-radius:12px; border:1px solid #ddd; font-size:16px; outline:none;
+    min-width:220px; background:#fff;
   }
-  input:focus, select:focus{
-    border-color:#2c7be5;
-    box-shadow:0 0 0 4px rgba(44,123,229,0.12);
-  }
+  input:focus, select:focus{ border-color:#2c7be5; box-shadow:0 0 0 4px rgba(44,123,229,0.12); }
 
   button{
-    padding:12px 14px;
-    border-radius:12px;
-    border:none;
-    font-size:15px;
-    cursor:pointer;
-    font-weight:900;
+    padding:12px 14px; border-radius:12px; border:none; font-size:15px; cursor:pointer;
+    white-space:nowrap; font-weight:900;
   }
-
   .primary{ background:#2c7be5; color:#fff; }
   .ghost{ background:#f3f4f6; border:1px solid #e5e7eb; }
   .danger{ background:#e55353; color:#fff; }
 
-  .tabs{ display:flex; gap:10px; }
-  .tab{
-    padding:10px 14px;
-    border-radius:999px;
-    border:1px solid #ddd;
-    background:#fff;
-    cursor:pointer;
-    font-weight:900;
-  }
-  .tab.active{
-    background:#111;
-    color:#fff;
-    border-color:#111;
+  .pill{
+    display:inline-block; font-size:12px; padding:6px 10px; border-radius:999px;
+    border:1px solid #ddd; color:#666;
   }
 
-  .grid{
-    display:grid;
-    grid-template-columns: 1fr 1fr;
-    gap:16px;
+  .tabs{ display:flex; gap:10px; }
+  .tab{
+    padding:10px 14px; border-radius:999px; border:1px solid #ddd; background:#fff; cursor:pointer; font-weight:900;
   }
-  @media (max-width:900px){
-    .grid{ grid-template-columns:1fr; }
-  }
+  .tab.active{ background:#111; color:#fff; border-color:#111; }
+
+  .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  @media (max-width:900px){ .grid{ grid-template-columns:1fr; } }
 
   .status{ font-size:18px; line-height:1.8; }
   .now{ color:#2c7be5; font-weight:900; }
-  .next{ font-weight:900; }
+  .next{ color:#111; font-weight:900; }
 
   .qitem{
-    display:flex;
-    gap:10px;
-    align-items:center;
-    justify-content:space-between;
-    padding:10px 12px;
-    border:1px solid #eee;
-    border-radius:14px;
-    margin-top:10px;
-    background:#fff;
+    display:flex; gap:10px; align-items:center; justify-content:space-between;
+    padding:10px 12px; border:1px solid #eee; border-radius:14px; margin-top:10px; background:#fff;
   }
-
   .qname{ font-weight:900; }
-  .qtools{ display:flex; gap:8px; flex-wrap:wrap; }
-
-  .mini{
-    padding:8px 10px;
-    border-radius:10px;
-    font-size:13px;
-    font-weight:900;
-    border:0;
-    cursor:pointer;
-  }
-
+  .qtools{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  .mini{ padding:8px 10px; border-radius:10px; font-size:13px; font-weight:900; border:0; cursor:pointer; }
   .miniUpDown{ background:#f3f4f6; border:1px solid #e5e7eb; }
   .miniDel{ background:#111; color:#fff; }
   .miniNow{ background:#2c7be5; color:#fff; }
 
-  .loginMask{
-    position:fixed;
-    inset:0;
-    background:rgba(0,0,0,.35);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:20px;
-  }
+  .hint{ font-size:13px; opacity:.7; margin-top:8px; }
 
+  .loginMask{
+    position:fixed; inset:0; background:rgba(0,0,0,.35);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
   .loginBox{
-    background:#fff;
-    border-radius:18px;
-    padding:18px;
-    max-width:420px;
-    width:100%;
+    background:#fff; border-radius:18px; padding:18px; max-width:420px; width:100%;
     box-shadow:0 10px 40px rgba(0,0,0,.2);
   }
+
+  .topRight{
+    display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap;
+  }
+  a.link{
+    text-decoration:none; font-weight:900; color:#111; opacity:.8;
+  }
+  a.link:hover{ opacity:1; }
 </style>
 </head>
 
 <body>
-
 <div class="container">
 
   <div class="card">
-    <h1>🛠 管理員介面</h1>
-    <div class="sub">新增房間 / 排序 / 設為現在 / 刪除</div>
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h1>🛠 管理員介面</h1>
+        <div class="sub">新增房間/機台 + 排序/設為現在/刪除/清空</div>
+      </div>
+      <div class="topRight">
+        <span class="pill" id="loginState">未登入</span>
+        <a class="link" href="index.html">← 回首頁</a>
+      </div>
+    </div>
   </div>
 
-  <!-- 你的 rooms + 調度 UI 在這裡（略） -->
-  <!-- 你可以保留原本的管理員操作區塊 -->
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" id="tabShower">🚿 洗澡</button>
+      <button class="tab" id="tabWasher">🧺 洗衣</button>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- 左：房間管理 -->
+    <div class="card">
+      <div class="pill">房間 / 機台管理</div>
+      <div class="hint">新增、刪除，並選擇要調度的房間</div>
+
+      <div class="row" style="margin-top:10px">
+        <select id="roomSelect"></select>
+        <button class="ghost" id="refreshRoomsBtn">重新整理</button>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <input id="newRoomName" placeholder="新增名稱（例：淋浴間 A / 洗衣機 1）" maxlength="30">
+        <button class="primary" id="addRoomBtn">新增</button>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button class="danger" id="deleteRoomBtn" style="flex:1">刪除選取房間（含隊伍）</button>
+      </div>
+
+      <div class="hint" id="roomHint" style="margin-top:12px;">載入中…</div>
+    </div>
+
+    <!-- 右：調度 -->
+    <div class="card">
+      <div class="pill">調度面板</div>
+
+      <div class="card status" style="margin-top:12px">
+        現在使用： <span id="current" class="now">—</span><br>
+        下一位： <span id="next" class="next">—</span><br>
+        第三位： <span id="third" class="next">—</span>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button class="ghost" id="clearCurrentBtn" style="flex:1">清空 current</button>
+        <button class="danger" id="clearQueueBtn" style="flex:1">清空 queue</button>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <input id="adminAddName" placeholder="管理員新增：輸入名字" maxlength="20">
+        <button class="ghost" id="adminAddBtn">新增到隊伍</button>
+      </div>
+
+      <div class="hint">可「設為現在」/「↑↓調整順序」/「刪除」都在這裡做。</div>
+      <div id="adminQueueBox"></div>
+    </div>
+
+  </div>
+
+  <audio id="beep" preload="auto"
+    src="data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQwAAAAA/////wAAAP////8AAAD/////AAAA/////wAAAP////8AAAD/////AAAA/////wAAAP////8="></audio>
 
 </div>
 
@@ -142,24 +167,27 @@
   <div class="loginBox">
     <h2 style="margin:0 0 8px;">管理員登入</h2>
 
-    <!-- ✅ 已移除密碼提示 -->
-    <div class="sub" style="margin-bottom:12px;">
-      輸入管理員密碼
-    </div>
+    <!-- ✅ 不顯示密碼提示 -->
+    <div class="sub" style="margin-bottom:12px;">輸入管理員密碼</div>
 
     <div class="row">
       <input id="pwInput" type="password" placeholder="輸入管理員密碼">
       <button class="primary" id="loginBtn">登入</button>
     </div>
+
+    <div class="hint">（登入狀態會保存在此瀏覽器，清除網站資料會失效）</div>
   </div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-import { getDatabase } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+import {
+  getDatabase, ref, set, push, remove, onValue, get
+} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
-/* ✅ 密碼仍在 JS，但畫面不顯示 */
+/* ===== 管理員密碼（不顯示在 UI）===== */
 const ADMIN_PASSWORD = "g8g8";
+/* =================================== */
 
 const firebaseConfig = {
   apiKey: "AIzaSyBSQAmMKvFjuANWhmZJAYHCwaIUTcwz6A8",
@@ -171,33 +199,267 @@ const firebaseConfig = {
   appId: "1:381125332620:web:642dcf482b06fa3b9f35a9"
 };
 
-initializeApp(firebaseConfig);
-getDatabase();
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
+function playBeep(){
+  const a = document.getElementById("beep");
+  if(!a) return;
+  a.currentTime = 0;
+  const p = a.play();
+  if(p && p.catch) p.catch(()=>{});
+}
+
+/** --------- 登入控制（localStorage）--------- */
 const loginMask = document.getElementById("loginMask");
-const pwInput = document.getElementById("pwInput");
-const loginBtn = document.getElementById("loginBtn");
+const loginState = document.getElementById("loginState");
+const LS_KEY = "camp_admin_ok";
 
 function setLoggedIn(ok){
-  localStorage.setItem("camp_admin_ok", ok ? "1" : "0");
+  localStorage.setItem(LS_KEY, ok ? "1" : "0");
+  applyLoginUI();
+}
+function isLoggedIn(){
+  return localStorage.getItem(LS_KEY) === "1";
+}
+function applyLoginUI(){
+  const ok = isLoggedIn();
   loginMask.style.display = ok ? "none" : "flex";
+  loginState.textContent = ok ? "已登入" : "未登入";
 }
+applyLoginUI();
 
-if(localStorage.getItem("camp_admin_ok")==="1"){
+document.getElementById("loginBtn").addEventListener("click", ()=>{
+  const pw = String(document.getElementById("pwInput").value || "");
+  if(pw !== ADMIN_PASSWORD) return alert("密碼錯誤");
   setLoggedIn(true);
+});
+document.getElementById("pwInput").addEventListener("keydown", (e)=>{
+  if(e.key === "Enter") document.getElementById("loginBtn").click();
+});
+
+/** --------- 系統狀態（洗澡/洗衣 + room）--------- */
+let mode = "shower";   // "shower" | "washer"
+let roomId = "";
+let roomMap = {};
+let queueCache = [];
+
+let unsubRooms = null;
+let unsubCurrent = null;
+let unsubQueue = null;
+
+const tabShower = document.getElementById("tabShower");
+const tabWasher = document.getElementById("tabWasher");
+const roomSelect = document.getElementById("roomSelect");
+const roomHint = document.getElementById("roomHint");
+
+const currentEl = document.getElementById("current");
+const nextEl = document.getElementById("next");
+const thirdEl = document.getElementById("third");
+const adminQueueBox = document.getElementById("adminQueueBox");
+
+function roomsRef(){ return ref(db, `queues/${mode}/rooms`); }
+function roomRoot(){ return `queues/${mode}/rooms/${roomId}`; }
+function stateCurrentRef(){ return ref(db, `${roomRoot()}/state/current`); }
+function queueRef(){ return ref(db, `${roomRoot()}/queue`); }
+
+function setMode(next){
+  mode = next;
+  tabShower.classList.toggle("active", mode==="shower");
+  tabWasher.classList.toggle("active", mode==="washer");
+  roomId = "";
+  loadRooms();
+}
+tabShower.addEventListener("click", ()=>setMode("shower"));
+tabWasher.addEventListener("click", ()=>setMode("washer"));
+
+function detachRoomListeners(){
+  if(unsubCurrent) unsubCurrent();
+  if(unsubQueue) unsubQueue();
+  unsubCurrent = null;
+  unsubQueue = null;
 }
 
-loginBtn.addEventListener("click", ()=>{
-  if(pwInput.value !== ADMIN_PASSWORD){
-    alert("密碼錯誤");
+function renderRooms(){
+  roomSelect.innerHTML = "";
+  const entries = Object.entries(roomMap || {});
+  if(entries.length === 0){
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "（沒有房間/機台，請新增）";
+    roomSelect.appendChild(opt);
+    roomHint.textContent = "目前沒有房間/機台，請先新增。";
     return;
   }
-  setLoggedIn(true);
+
+  entries.sort((a,b)=> String(a[1]?.name||"").localeCompare(String(b[1]?.name||""), "zh-Hant"));
+  if(!roomId || !roomMap[roomId]) roomId = entries[0][0];
+
+  for(const [id, v] of entries){
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = v?.name ? v.name : id;
+    opt.selected = (id === roomId);
+    roomSelect.appendChild(opt);
+  }
+
+  roomHint.textContent = `目前選擇：${roomMap?.[roomId]?.name || roomId}`;
+}
+
+function renderQueuePanel(){
+  currentEl.textContent = currentEl.textContent || "—";
+  nextEl.textContent = queueCache[0]?.name || "—";
+  thirdEl.textContent = queueCache[1]?.name || "—";
+
+  adminQueueBox.innerHTML = "";
+  queueCache.forEach((q, idx)=>{
+    const row = document.createElement("div");
+    row.className = "qitem";
+    row.innerHTML = `
+      <div class="qname">${idx+1}. ${q.name}</div>
+      <div class="qtools">
+        <button class="mini miniNow" data-act="now" data-key="${q.key}">設為現在</button>
+        <button class="mini miniUpDown" data-act="up" data-key="${q.key}">↑</button>
+        <button class="mini miniUpDown" data-act="down" data-key="${q.key}">↓</button>
+        <button class="mini miniDel" data-act="del" data-key="${q.key}">刪</button>
+      </div>
+    `;
+    adminQueueBox.appendChild(row);
+  });
+}
+
+function attachRoomListeners(){
+  detachRoomListeners();
+  if(!roomId) return;
+
+  unsubCurrent = onValue(stateCurrentRef(), (snap)=>{
+    currentEl.textContent = (snap.exists() && snap.val()) ? snap.val() : "—";
+  });
+
+  unsubQueue = onValue(queueRef(), (snap)=>{
+    const data = snap.val() || {};
+    const arr = Object.entries(data).map(([key, v]) => ({
+      key,
+      name: v?.name ?? "",
+      ts: v?.ts ?? 0
+    })).filter(x=>String(x.name).trim());
+
+    arr.sort((a,b)=>a.ts-b.ts);
+    queueCache = arr;
+    renderQueuePanel();
+  });
+}
+
+function loadRooms(){
+  if(unsubRooms) unsubRooms();
+  roomHint.textContent = "載入中…";
+
+  unsubRooms = onValue(roomsRef(), (snap)=>{
+    roomMap = snap.val() || {};
+    renderRooms();
+    attachRoomListeners();
+  });
+}
+
+roomSelect.addEventListener("change", ()=>{
+  roomId = roomSelect.value;
+  renderRooms();
+  attachRoomListeners();
 });
 
-pwInput.addEventListener("keydown", e=>{
-  if(e.key==="Enter") loginBtn.click();
+document.getElementById("refreshRoomsBtn").addEventListener("click", loadRooms);
+
+document.getElementById("addRoomBtn").addEventListener("click", async ()=>{
+  if(!isLoggedIn()) return alert("請先登入管理員");
+  const name = String(document.getElementById("newRoomName").value || "").trim();
+  if(!name) return alert("請輸入名稱");
+  const newId = `room_${Date.now()}`;
+  await set(ref(db, `queues/${mode}/rooms/${newId}`), { name });
+  document.getElementById("newRoomName").value = "";
 });
+
+document.getElementById("deleteRoomBtn").addEventListener("click", async ()=>{
+  if(!isLoggedIn()) return alert("請先登入管理員");
+  if(!roomId) return alert("沒有可刪的房間/機台");
+  const roomName = roomMap?.[roomId]?.name || roomId;
+  if(!confirm(`確定刪除「${roomName}」？（含 current 與 queue）`)) return;
+  await remove(ref(db, `queues/${mode}/rooms/${roomId}`));
+  roomId = "";
+  queueCache = [];
+  renderQueuePanel();
+});
+
+document.getElementById("clearCurrentBtn").addEventListener("click", async ()=>{
+  if(!isLoggedIn()) return alert("請先登入管理員");
+  if(!roomId) return alert("請先選房間/機台");
+  if(!confirm("確定清空 current？")) return;
+  await set(stateCurrentRef(), null);
+});
+
+document.getElementById("clearQueueBtn").addEventListener("click", async ()=>{
+  if(!isLoggedIn()) return alert("請先登入管理員");
+  if(!roomId) return alert("請先選房間/機台");
+  if(!confirm("確定清空整個 queue？")) return;
+  await set(queueRef(), null);
+});
+
+document.getElementById("adminAddBtn").addEventListener("click", async ()=>{
+  if(!isLoggedIn()) return alert("請先登入管理員");
+  if(!roomId) return alert("請先選房間/機台");
+  const name = String(document.getElementById("adminAddName").value || "").trim();
+  if(!name) return;
+  await push(queueRef(), { name, ts: Date.now() });
+  document.getElementById("adminAddName").value = "";
+});
+
+async function rewriteQueueOrderFromCache(){
+  const base = Date.now();
+  const obj = {};
+  queueCache.forEach((q,i)=>{ obj[q.key] = { name:q.name, ts: base+i }; });
+  await set(queueRef(), Object.keys(obj).length ? obj : null);
+}
+
+adminQueueBox.addEventListener("click", async (e)=>{
+  const btn = e.target.closest("button");
+  if(!btn) return;
+  if(!isLoggedIn()) return alert("請先登入管理員");
+  if(!roomId) return alert("請先選房間/機台");
+
+  const act = btn.dataset.act;
+  const key = btn.dataset.key;
+  const idx = queueCache.findIndex(x=>x.key===key);
+  if(idx < 0) return;
+
+  if(act==="del"){
+    if(!confirm("確定移除？")) return;
+    await remove(ref(db, `${roomRoot()}/queue/${key}`));
+    return;
+  }
+
+  if(act==="now"){
+    const name = queueCache[idx].name;
+    if(!confirm(`確定設「${name}」為現在？（並從隊伍移除）`)) return;
+    await set(stateCurrentRef(), name);
+    await remove(ref(db, `${roomRoot()}/queue/${key}`));
+    playBeep();
+    return;
+  }
+
+  if(act==="up" && idx>0){
+    [queueCache[idx-1], queueCache[idx]] = [queueCache[idx], queueCache[idx-1]];
+    await rewriteQueueOrderFromCache();
+    return;
+  }
+
+  if(act==="down" && idx<queueCache.length-1){
+    [queueCache[idx+1], queueCache[idx]] = [queueCache[idx], queueCache[idx+1]];
+    await rewriteQueueOrderFromCache();
+    return;
+  }
+});
+
+/** init */
+loadRooms();
 </script>
 
 </body>
