@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>營隊洗澡排隊</title>
+<style>
+body { font-family: sans-serif; padding: 20px; }
+.card { border:1px solid #ccc; padding:15px; margin:10px 0; border-radius:10px; }
+.big { font-size:22px; font-weight:bold; }
+button { padding:10px 15px; border:none; border-radius:8px; background:black; color:white; }
+input { padding:10px; border-radius:8px; border:1px solid #ccc; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="big">🚿 洗澡排隊系統</div>
+</div>
+
+<div class="card">
+  <div class="big">現在洗澡： <span id="current">—</span></div>
+  <div class="big">下一位準備： <span id="next">—</span></div>
+</div>
+
+<div class="card">
+  <input id="nameInput" placeholder="輸入名字">
+  <button onclick="joinQueue()">加入排隊</button>
+</div>
+
+<div class="card">
+  <button onclick="finish()">我洗好了 → 叫下一位</button>
+</div>
+
+<div class="card">
+  <div class="big">排隊名單</div>
+  <ol id="queueList"></ol>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "你的apiKey",
+  authDomain: "你的authDomain",
+  databaseURL: "你的databaseURL",
+  projectId: "你的projectId",
+  storageBucket: "你的storageBucket",
+  messagingSenderId: "你的messagingSenderId",
+  appId: "你的appId"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const queueRef = ref(db, "bathQueue");
+
+onValue(queueRef, (snap) => {
+  const queue = snap.val() || [];
+  document.getElementById("current").innerText = queue[0] || "—";
+  document.getElementById("next").innerText = queue[1] || "—";
+  let list = document.getElementById("queueList");
+  list.innerHTML = "";
+  queue.forEach(name=>{
+    let li = document.createElement("li");
+    li.innerText = name;
+    list.appendChild(li);
+  });
+});
+
+window.joinQueue = async function(){
+  let name = document.getElementById("nameInput").value.trim();
+  if(!name) return;
+  await runTransaction(queueRef, (queue)=>{
+    queue = queue || [];
+    if(queue.includes(name)) return queue;
+    queue.push(name);
+    return queue;
+  });
+  document.getElementById("nameInput").value="";
+};
+
+window.finish = async function(){
+  if(confirm("確定洗好了嗎？")){
+    await runTransaction(queueRef, (queue)=>{
+      queue = queue || [];
+      queue.shift();
+      return queue;
+    });
+  }
+};
+</script>
+
+</body>
+</html>
