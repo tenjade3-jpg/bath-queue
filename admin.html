@@ -74,12 +74,8 @@
     box-shadow:0 10px 40px rgba(0,0,0,.2);
   }
 
-  .topRight{
-    display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap;
-  }
-  a.link{
-    text-decoration:none; font-weight:900; color:#111; opacity:.8;
-  }
+  .topRight{ display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
+  a.link{ text-decoration:none; font-weight:900; color:#111; opacity:.8; }
   a.link:hover{ opacity:1; }
 </style>
 </head>
@@ -95,6 +91,7 @@
       </div>
       <div class="topRight">
         <span class="pill" id="loginState">未登入</span>
+        <button class="ghost" id="logoutBtn" style="display:none;">登出</button>
         <a class="link" href="index.html">← 回首頁</a>
       </div>
     </div>
@@ -166,8 +163,6 @@
 <div class="loginMask" id="loginMask">
   <div class="loginBox">
     <h2 style="margin:0 0 8px;">管理員登入</h2>
-
-    <!-- ✅ 不顯示密碼提示 -->
     <div class="sub" style="margin-bottom:12px;">輸入管理員密碼</div>
 
     <div class="row">
@@ -175,7 +170,7 @@
       <button class="primary" id="loginBtn">登入</button>
     </div>
 
-    <div class="hint">（登入狀態會保存在此瀏覽器，清除網站資料會失效）</div>
+    <div class="hint">（登入狀態會保存在此瀏覽器）</div>
   </div>
 </div>
 
@@ -185,9 +180,11 @@ import {
   getDatabase, ref, set, push, remove, onValue, get
 } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
-/* ===== 管理員密碼（不顯示在 UI）===== */
+/* ✅ 密碼只在 JS，不顯示 */
 const ADMIN_PASSWORD = "g8g8";
-/* =================================== */
+
+/* ✅ 固定一個 key，避免自動登出（你之前就是 key 亂掉） */
+const LS_KEY = "camp_admin_ok";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBSQAmMKvFjuANWhmZJAYHCwaIUTcwz6A8",
@@ -210,15 +207,13 @@ function playBeep(){
   if(p && p.catch) p.catch(()=>{});
 }
 
-/** --------- 登入控制（localStorage）--------- */
+/** ===== 登入控制（修正版：不會自動登出）===== */
 const loginMask = document.getElementById("loginMask");
 const loginState = document.getElementById("loginState");
-const LS_KEY = "camp_admin_ok";
+const logoutBtn = document.getElementById("logoutBtn");
+const pwInput = document.getElementById("pwInput");
+const loginBtn = document.getElementById("loginBtn");
 
-function setLoggedIn(ok){
-  localStorage.setItem(LS_KEY, ok ? "1" : "0");
-  applyLoginUI();
-}
 function isLoggedIn(){
   return localStorage.getItem(LS_KEY) === "1";
 }
@@ -226,20 +221,31 @@ function applyLoginUI(){
   const ok = isLoggedIn();
   loginMask.style.display = ok ? "none" : "flex";
   loginState.textContent = ok ? "已登入" : "未登入";
+  logoutBtn.style.display = ok ? "inline-block" : "none";
 }
 applyLoginUI();
 
-document.getElementById("loginBtn").addEventListener("click", ()=>{
-  const pw = String(document.getElementById("pwInput").value || "");
-  if(pw !== ADMIN_PASSWORD) return alert("密碼錯誤");
-  setLoggedIn(true);
-});
-document.getElementById("pwInput").addEventListener("keydown", (e)=>{
-  if(e.key === "Enter") document.getElementById("loginBtn").click();
+loginBtn.addEventListener("click", ()=>{
+  if(String(pwInput.value || "") !== ADMIN_PASSWORD){
+    alert("登入失敗");
+    return;
+  }
+  localStorage.setItem(LS_KEY, "1");
+  pwInput.value = "";
+  applyLoginUI();
 });
 
-/** --------- 系統狀態（洗澡/洗衣 + room）--------- */
-let mode = "shower";   // "shower" | "washer"
+pwInput.addEventListener("keydown", (e)=>{
+  if(e.key === "Enter") loginBtn.click();
+});
+
+logoutBtn.addEventListener("click", ()=>{
+  localStorage.removeItem(LS_KEY);
+  applyLoginUI();
+});
+
+/** ===== rooms + 調度 ===== */
+let mode = "shower";
 let roomId = "";
 let roomMap = {};
 let queueCache = [];
@@ -289,6 +295,9 @@ function renderRooms(){
     opt.textContent = "（沒有房間/機台，請新增）";
     roomSelect.appendChild(opt);
     roomHint.textContent = "目前沒有房間/機台，請先新增。";
+    roomId = "";
+    queueCache = [];
+    renderQueuePanel();
     return;
   }
 
@@ -307,7 +316,6 @@ function renderRooms(){
 }
 
 function renderQueuePanel(){
-  currentEl.textContent = currentEl.textContent || "—";
   nextEl.textContent = queueCache[0]?.name || "—";
   thirdEl.textContent = queueCache[1]?.name || "—";
 
