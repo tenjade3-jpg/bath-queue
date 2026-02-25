@@ -158,7 +158,7 @@
 
   <div class="card">
     <button class="finish" id="doneBtn">我洗好了 → 叫下一位</button>
-    <div class="hint">（暫停期間不能叫下一位）</div>
+    <div class="hint">（未到時間 / 暫停期間不能叫下一位）</div>
   </div>
 
   <div class="card">
@@ -214,7 +214,7 @@ let lastPrepName = "";
 // control state
 let plannedStartAt = null;
 let isPaused = false;
-let controlLoaded = false; // ✅ 關鍵：未同步前禁止開始
+let controlLoaded = false;
 
 // timer state
 let timer = null;
@@ -307,21 +307,17 @@ function renderControlPills(){
   pausedPill.textContent = `狀態：${isPaused ? "暫停中" : "正常"}`;
 }
 
-function canStartNowWith(control){
+function gateNow(control){
   const now = Date.now();
-  const cLoaded = control?.loaded === true;
-
-  if(!cLoaded) return { ok:false, reason:"同步中…請等 1 秒再按開始。" };
-
+  if(!control.loaded) return { ok:false, reason:"同步中…請等 1 秒再操作。" };
   if(control.isPaused) return { ok:false, reason:"目前已被管理員暫停，請等待解除暫停。" };
-  if(control.plannedStartAt && now < control.plannedStartAt){
-    return { ok:false, reason:`尚未到可開始時間（${fmtHHMM(control.plannedStartAt)}）。` };
-    }
+  if(control.plannedStartAt && now < control.plannedStartAt) return { ok:false, reason:`尚未到可開始時間（${fmtHHMM(control.plannedStartAt)}）。` };
   return { ok:true, reason:"" };
 }
 
 function renderDoneBtnLock(){
-  if(isPaused){
+  const g = gateNow({ loaded: controlLoaded, plannedStartAt, isPaused });
+  if(!g.ok){
     doneBtn.disabled = true;
     doneBtn.style.opacity = "0.55";
     doneBtn.style.cursor = "not-allowed";
@@ -343,14 +339,14 @@ function renderTimerUI(){
   const hasCurrent = !!curName && curName !== "—";
   const notStarted = (!timer || !timer.startAt);
 
-  const gate = canStartNowWith({ loaded: controlLoaded, plannedStartAt, isPaused });
+  const g = gateNow({ loaded: controlLoaded, plannedStartAt, isPaused });
 
-  const showStart = hasCurrent && notStarted && gate.ok;
+  const showStart = hasCurrent && notStarted && g.ok;
   startTimerBtn.style.display = showStart ? "inline-block" : "none";
 
-  if(hasCurrent && notStarted && !gate.ok){
+  if(hasCurrent && notStarted && !g.ok){
     lockMsg.style.display = "block";
-    lockMsg.textContent = gate.reason;
+    lockMsg.textContent = g.reason;
   }else{
     lockMsg.style.display = "none";
     lockMsg.textContent = "";
@@ -409,7 +405,6 @@ function attach(){
   detach();
   if(!roomId) return;
 
-  // ✅ 切換房間時：先視為未同步
   controlLoaded = false;
   plannedStartAt = null;
   isPaused = false;
@@ -425,7 +420,7 @@ function attach(){
     const c = snap.exists() ? (snap.val()||{}) : {};
     plannedStartAt = c.plannedStartAt ? Number(c.plannedStartAt) : null;
     isPaused = !!c.isPaused;
-    controlLoaded = true; // ✅ 第一次收到 control 才算同步完成
+    controlLoaded = true;
 
     renderControlPills();
     renderTimerUI();
@@ -469,24 +464,18 @@ document.getElementById("refreshRoomsBtn").addEventListener("click", loadRooms);
 
 setInterval(()=>{ if(roomId) renderTimerUI(); }, 1000);
 
-/** ✅ 關鍵：按開始時，再從 Firebase 讀一次最新 control，避免延遲/快取 */
+/** 開始計時：按下當下強制讀最新 control */
 startTimerBtn.addEventListener("click", async ()=>{
   if(!roomId) return;
-
   const curName = String(currentEl.textContent || "").trim();
   if(!curName || curName==="—") return alert("目前沒有「現在洗澡」的人");
 
-  // 重新讀 control（強制最新）
   const cSnap = await get(controlRef());
   const c = cSnap.exists() ? (cSnap.val() || {}) : {};
-  const latest = {
-    loaded: true,
-    plannedStartAt: c.plannedStartAt ? Number(c.plannedStartAt) : null,
-    isPaused: !!c.isPaused
-  };
+  const latest = { loaded:true, plannedStartAt: c.plannedStartAt ? Number(c.plannedStartAt) : null, isPaused: !!c.isPaused };
 
-  const gate = canStartNowWith(latest);
-  if(!gate.ok) return alert(gate.reason);
+  const g = gateNow(latest);
+  if(!g.ok) return alert(g.reason);
 
   const tSnap = await get(timerRef());
   const t = tSnap.exists() ? (tSnap.val() || {}) : {};
@@ -495,15 +484,18 @@ startTimerBtn.addEventListener("click", async ()=>{
   await set(timerRef(), { durationMs: DURATION_MS, startAt: Date.now(), isRunning: true, pausedAt: null, pausedTotalMs: 0 });
 });
 
-/** 暫停時不能叫下一位 */
+/** 叫下一位：未到時間/暫停 一律不能切 */
 doneBtn.addEventListener("click", async ()=>{
-  // 再讀一次最新 control，避免剛暫停但本地還沒同步
+  if(!roomId) return alert("目前沒有房間可選，請先請管理員新增。");
+
+  // ✅ 按下當下強制讀最新 control（避免剛更新但本地還沒同步）
   const cSnap = await get(controlRef());
   const c = cSnap.exists() ? (cSnap.val() || {}) : {};
-  const latestPaused = !!c.isPaused;
-  if(latestPaused) return alert("目前已被管理員暫停，暫停期間不能叫下一位。");
+  const latest = { loaded:true, plannedStartAt: c.plannedStartAt ? Number(c.plannedStartAt) : null, isPaused: !!c.isPaused };
 
-  if(!roomId) return alert("目前沒有房間可選，請先請管理員新增。");
+  const g = gateNow(latest);
+  if(!g.ok) return alert(g.reason);
+
   if(!confirm("確定你洗好了，要叫下一位嗎？")) return;
 
   const q = query(queueRef(), orderByChild("ts"), limitToFirst(1));
